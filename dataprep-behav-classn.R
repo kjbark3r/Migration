@@ -107,11 +107,4 @@ for (i in 1:nyrs) {
   }
 } 
 
-
-## create indivyr identifier (in case use >1 yr data/indiv)
-## using unnecessarily complex code to pull only the last 2 digits of year
-alldat$IndivYr <- paste0(alldat$AnimalID, "-", 
-                         substr(alldat$Year, 
-                                (nchar(alldat$Year)+1)-2, 
-                                nchar(alldat$Year)))
-
+write.csv(alldat, file = "elklocs-behavclassn.csv", row.names=F)
