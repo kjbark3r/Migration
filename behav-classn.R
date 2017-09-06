@@ -28,9 +28,9 @@
 
 #### working directories and database connection ####
 
-  wd_workcomp <- "C:\\Users\\kristin.barker\\Documents\\GitHub\\ElkMigrationAnalyses"
-  wd_laptop <- "C:\\Users\\kjbark3r\\Documents\\GitHub\\ElkMigrationAnalyses"
-  wd_worklaptop <- "C:\\Users\\kristin\\Documents\\ElkMigrationAnalyses"
+  wd_workcomp <- "C:\\Users\\kristin.barker\\Documents\\GitHub\\Migration"
+  wd_laptop <- "C:\\Users\\kjbark3r\\Documents\\GitHub\\Migration"
+  wd_worklaptop <- "C:\\Users\\kristin\\Documents\\Migration"
   if (file.exists(wd_workcomp)) {setwd(wd_workcomp)
   } else {
     if(file.exists(wd_laptop)) {setwd(wd_laptop)
@@ -53,80 +53,17 @@
 
   
 
-#### read in and format elk collar location data ####
-
-  #locs <- read.csv("../DatabasesEtc/Statewide/mtelkcollardata.csv", as.is = TRUE, header = TRUE)
-  rawlocs <- read.csv("../DatabasesEtc/collardata-locsonly-equalsampling.csv", as.is = TRUE, header = TRUE)
-  
-  locs <- rawlocs %>%
-    # format date
-    within(Date <- as.Date(Date, "%Y-%m-%d")) %>%
-    # add month, year, season, and HRYear (match Dec from previous calendar year with subsequent Jan and Feb)
-    mutate(Month = months(Date, abbreviate = TRUE),
-           Year = format(as.Date(Date, format = "%Y-%m-%d"), "%Y"),
-           Season = ifelse(Month == "Dec" | Month == "Jan" | Month == "Feb", "Winter", 
-                              ifelse(Month == "Mar" | Month == "Apr" | Month == "May", "Spring",
-                                     ifelse(Month == "Jun" | Month == "Jul" | Month == "Aug", "Summer",
-                                            "Fall"))),
-           HRYear = ifelse(Month == "Dec", as.numeric(Year)+1, as.numeric(Year)))
-
 
   
-#### definitions and data prep for overlap estimation ####  
-    
-  # subset only winter and summer locations (just to speed computing)
-  vidat <- subset(locs, Season == "Winter" | Season == "Summer")
-  
-  # list relevant years of data
-  yrs <- unique(vidat$HRYear)
-  
-  # define number of years
-  nyrs <- length(yrs)
-  
-  # create empty dataframe to store relevant locations in
-  # with the same number of columns and column names as the full dataframe
-  alldat <- data.frame(matrix(NA, nrow = 0, ncol = ncol(vidat)))
-  colnames(alldat) <- colnames(vidat)
-
-  for (i in 1:nyrs) {
-    # for each year
-    yr <- yrs[i]
-    # subset that year's data
-    yrdat <- subset(vidat, HRYear == yr)
-    # and make a list of indivs from that year
-    indivs <- unique(yrdat$AnimalID)
-    
-    for(j in 1:length(indivs)) {
-      # for each individual from that year
-      indiv <- indivs[j]
-      indivdat <- subset(yrdat, AnimalID == indiv)
-      # if it has both winter and summer locations
-      indivdatsub <- data.frame(ifelse(length(unique(indivdat$Season)) > 1, indivdat, next))
-      # keep its data; otherwise discard (bc volume intersection requires both seasonal HRs)
-      alldat <- rbind(alldat, indivdat)
-    }
-  } 
+#### calculate HR area and volume intersection for each individual #### 
   
   
-  ## create indivyr identifier (in case use >1 yr data/indiv)
-  ## using unnecessarily complex code to just pull the last 2 digits of year
-  alldat$IndivYr <- paste0(alldat$AnimalID, "-", 
-                           substr(alldat$Year, 
-                                  (nchar(alldat$Year)+1)-2, 
-                                  nchar(alldat$Year)))
-
+  
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
 ####                 WORK IN PROGRESS                  ####
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
 
-  test <- paste0(alldat$AnimalID, "-", substr(alldat$Year, (nchar(alldat$Year)+1)-2, nchar(alldat$Year)))
-#### | next steps | ####
-  
-
-## for ea indiv
-  ## for ea yr
-  
-  ## NOW CREATE INDIVYR AND JUST ROLL WITH THIS; REMOVES DOUBLE FOR LOOP
+## for each indivyr
   ## make a spdf of relevant locs
   ## calc 2 UDSs, one per Season [kernelUD}]
   ## calc area of each UD **specify unin and unout [getverticeshr]
@@ -134,4 +71,6 @@
   ## calc 95% VI
   ## calc 50% VI [kerneloverlapHR]
   ## store: indiv, year, km2Win, km2Sum, VI95, VI50
+  
+  
     
