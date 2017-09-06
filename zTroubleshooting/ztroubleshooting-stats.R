@@ -73,3 +73,17 @@
   #### adding a legend
   
   legend(40,0.2, c("df=1", "df=5", "df=10", "df=20", "df=40"), text.col=c("black", "red","blue", "green","purple"))
+  
+  
+  
+  
+#### ASSESSING GOODNESS OF FIT GOF ####  
+  
+  
+  ##   from ex 8.2.2 on onlinecourses.science.psu.edu/STAT504
+  
+  ?pchisq # pchisq(q, df)
+  # stackexchange says pval = 1 - pchisq(deviance, degrees of freedon)
+  1 - pchisq(35.40, 32)
+  1 - pchisq(0.5415^2, 1)
+  
