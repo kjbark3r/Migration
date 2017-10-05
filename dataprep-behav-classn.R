@@ -1,6 +1,6 @@
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
-#       FORMATTING ELK DATA IN PREPARATION FOR            #
-#    CLASSIFYING MIGRATORY BEHAVIOR OF INDIVIDUALS        #
+#           FORMATTING STATEWIDE ELK GPS DATA             #
+#    TO ASSESS FACTORS INFLUENCING MIGRATORY BEHAVIOR     #
 #                   KRISTIN BARKER                        #
 #                   SEPTEMBER 2017                        #
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
@@ -38,10 +38,10 @@ if (file.exists(wd_workcomp)) {setwd(wd_workcomp)
     setwd(wd_worklaptop)
   }
 }
-# if(file.exists(wd_worklaptop)) {
-#   channel <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-#                                dbq=C:/Users/kristin/Documents/DatabasesEtc/Statewide/MtElkDatabase.accdb")
-# } else {  cat("Maybe you shouldn't have been so lazy when you made this code") }
+if(file.exists(wd_worklaptop)) {
+ channel <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
+                              dbq=C:/Users/kristin/Documents/DatabasesEtc/Statewide_Elk_GPS.accdb")
+} else {  cat("Maybe you shouldn't have been so lazy when you made this code") }
 rm(wd_workcomp, wd_laptop, wd_worklaptop)
 
 
