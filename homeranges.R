@@ -21,7 +21,7 @@
     library(rgdal) # for latlong/stateplane conversions
     library(gsubfn)
     library(maptools) # for writeSpatialShape
-    library(ggmap)
+    library(ggmap) # in case you want to plot in R
     library(dplyr) # for joins and general awesomeness
   
   
@@ -41,16 +41,22 @@
   
     
   
-  #### "Raw" data ####
+  #### "Raw" data (processed in dataprep-elkdb.R) ####
   
   
-    # Read in populations, years, and individuals of interest 
+    # Populations & years of interest 
     popnyrs <- read.csv("popns-yrs.csv") %>%
       within(Year <- as.numeric(Year))
+    
+    # All female locations
+    allcowlocs <- read.csv("locs-allcows.csv") %>%
+      mutate(Sex = factor(Sex))
+    allindivs <-  data.frame(AnimalID = unique(allcowlocs$AnimalID))
+    
+    # Females to use in actual model
     locs <- read.csv("locs.csv") %>%
       within(Year <- as.numeric(Year))
-    allcowlocs <- read.csv("locs-allcows.csv") %>%
-      factor(Sex)
+    modindivs <- data.frame(AnimalID = unique(locs$AnimalID))
   
   
   #### Projections ####
@@ -67,24 +73,60 @@
   
   
     
-  # Define and subset info relevant for popn home ranges
-  popnlocs <- allcowlocs %>%
-    mutate(Year = as.numeric(substr(Date, 0, 4)),
-           Month = as.numeric(substr(Date, 6, 7))) %>%
-    # only keep indiv locs from popns and years of interest
-    semi_join(indivs, by = "AnimalID") %>%
-    semi_join(popnyrs, by = c("Herd", "Year")) %>%
-    # to use locns collected during growing season (may-aug)
-    filter(Month >= 05 & Month <= 08)  %>%
-    # remove stored data about filtered out herds (too few indivs)
-    mutate(Herd = factor(Herd))
+  #### Define and subset info relevant for popn home ranges ####
+    
+    
+    # growing season (for covariate extractions)
+    popnlocsgrow <- allcowlocs %>%
+      mutate(Year = as.numeric(substr(Date, 0, 4)),
+             Month = as.numeric(substr(Date, 6, 7))) %>%
+      # only keep indivs from popns and years interest
+      semi_join(popnyrs, by = c("Herd", "Year")) %>%
+      # only locns collected during growing season (may-aug)
+      filter(Month >= 05 & Month <= 08)  %>%
+      # remove stored data about filtered out herds (too few indivs)
+      mutate(Herd = factor(Herd))
+    
+    
 
     
-  # Identify individuals of interest
-  indivs <- data.frame(AnimalID = unique(locs$AnimalID))
-  str(indivs)
-  
+    #### * IN PROGRESS * ####
+    
+    # winter (for density estimates)
+    ## need to define winter as including previous year's december,
+    ## and maybe november (depends on timing of population estimates)
+        popnlocsgrowwin <- allcowlocs %>%
+      mutate(Year = as.numeric(substr(Date, 0, 4)),
+             Month = as.numeric(substr(Date, 6, 7))) %>%
+      # only keep indivs from popns and years interest
+      semi_join(popnyrs, by = c("Herd", "Year")) %>%
+      # only locns collected during growing season (may-aug)
+      filter(Month >= 05 & Month <= 08)  %>%
+      # remove stored data about filtered out herds (too few indivs)
+      mutate(Herd = factor(Herd))
+    
+    #### *  * ####
+        
+    
+    
+    #### Define and subset info relevant for indiv home ranges  ####
+    
+      #### * IN PROGRESS * ####
+    
+      ## below code loses some indivs for some reason
+      ## you should probably figure that out
+      ## (already started in troubleshooting-locs)
+      indivlocs <- locs %>%
+        mutate(Year = as.numeric(substr(Date, 0, 4)),
+               Month = as.numeric(substr(Date, 6, 7))) %>%
+        # only locns collected during winter (dec-feb, but captures didn't start until jan)
+        filter(Month >= 01 & Month <= 03)  %>%
+        # remove stored data about filtered out herds (too few indivs)
+        mutate(Herd = factor(Herd)) %>%
+        group_by(AnimalID) %>%
+        filter(n() > 5)
 
+      #### *  * ####
 
   
 ### ### ### ### ### ##
@@ -93,20 +135,23 @@
     
   
   
-  # get xy points; write to dataframe, to spatial data frame, to stateplane projection
-  xy <- data.frame("x"=popnlocs$Long,"y"=popnlocs$Lat)
-  spdf.ll <- SpatialPointsDataFrame(xy, popnlocs, proj4string = latlong)
+  #### get xy points; write to dataframe, to spatial data frame, to stateplane ####
+    
+  xy <- data.frame("x"=popnlocsgrow$Long,"y"=popnlocsgrow$Lat)
+  spdf.ll <- SpatialPointsDataFrame(xy, popnlocsgrow, proj4string = latlong)
   spdf.sp <- spTransform(spdf.ll,stateplane)
   
   
   
-  # estimate mcp for each population
-  mcps <- mcp(spdf.sp[,3], percent = 100) #,3 = Herd
+  #### estimate mcp for each population ####
+  
+  popnhrs <- mcp(spdf.sp[,3], percent = 100) #,3 = Herd
 
   
   
-  #export population home ranges
-  writeOGR(mcps, 
+  #### export population home ranges####
+  
+  writeOGR(popnhrs, 
            dsn = "../GIS/Shapefiles/Elk", 
            layer = "PpnGrowingSsnHRs", 
            driver = "ESRI Shapefile",
@@ -114,9 +159,61 @@
 
   
  
-    #export individual locations
+  #### export individual locations ####
+  
   writeOGR(spdf.sp, 
+         dsn = "../GIS/Shapefiles/Elk", 
+         layer = "PpnGrowingSsnLocns", 
+         driver = "ESRI Shapefile",
+         overwrite = TRUE)
+  
+  
+
+  
+### ### ### ### ### ###
+####  |INDIV HRS|  ####
+### ### ### ### ### ###
+  
+  
+  
+  #### * IN PROGRESS * ####
+  #  pending above fixes  #
+
+  #### get xy points; write to dataframe, to spatial data frame, to stateplane ####
+  xy <- data.frame("x"=indivlocs$Long,"y"=indivlocs$Lat)
+  spdf.ll <- SpatialPointsDataFrame(xy, indivlocs, proj4string = latlong)
+  spdf.sp <- spTransform(spdf.ll,stateplane)
+  
+  
+  #### estimate mcp for each indiv ####
+  indivhrs <- mcp(spdf.sp[,1], percent = 100) #,1 = AnimalID
+  
+  
+  
+  #### export population home ranges ####
+  writeOGR(indivhrs, 
            dsn = "../GIS/Shapefiles/Elk", 
-           layer = "PpnGrowingSsnLocns", 
+           layer = "IndivWinHRs", 
            driver = "ESRI Shapefile",
            overwrite = TRUE)
+  
+  
+  
+  #### export individual locations ####
+  writeOGR(spdf.sp, 
+           dsn = "../GIS/Shapefiles/Elk", 
+           layer = "IndivWinLocns", 
+           driver = "ESRI Shapefile",
+           overwrite = TRUE)
+  
+  #### *  * ####
+  
+  
+### ### ###  ### ### ### 
+#### ~ NEXT STEPS ~ ####
+### ### ###  ### ### ### 
+
+
+# create population growing season home range EXCLUSIVE of individual winter season home range
+  # and store with indiv identifier, to to use in calculating what's avail on winter range
+    # vs what's avail outside that area during summer
