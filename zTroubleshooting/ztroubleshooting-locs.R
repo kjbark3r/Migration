@@ -387,3 +387,26 @@ length(unique(test2$AnimalID))
     #what i want to define
     spdf.sp[,3] 
     ?which
+# eh fuck it for now; work on this if time later
+
+
+#### testing removing indivs with <5 relocs (for hr estn) ####
+
+length(unique(indivlocs$AnimalID))
+length(unique(locs$AnimalID))
+# we lose 54 individuals when we subset out winter locs only, wtf
+# thought winter captures... oh maybe there are some in march, ugh
+
+hmcap <- fixedcap %>%
+  # only indivs in herds and yrs of interest
+  mutate(Year = as.numeric(substr(CaptureDate, 0, 4))) %>%
+  semi_join(popnyrs, by = c("Herd", "Year")) %>%
+  filter(Sex == "F")
+
+length(unique(hmcap$AnimalID))
+length(unique(hmcap$Herd))
+
+test <- indivlocs %>%
+  group_by(AnimalID) %>%
+  summarise(count = n())
+
