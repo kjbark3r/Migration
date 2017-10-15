@@ -1,7 +1,7 @@
 ### PLAYING AROUND WITH HANDLING NDVI DATA ###
 # KJB 2017-07-13
 
-setwd("C:/Users/kristin/Documents/ElkMigrationAnalyses/Forage")
+setwd("C:\\Users\\kristin\\Documents\\Migration")
 
 library(raster)
 
@@ -16,7 +16,7 @@ test <- raster("NDVI20160406097.tif")
 test
 plot(test)
 # sweet, this is entire state so should hopefully cover whatever i need
-# downloaded from mt state website
+
 
 elk <- raster("C:\\Users\\kristin\\Documents\\zzDesktop_2017-06-13\\GitHub\\KDEs\\KDE140630-15sum.tif")
 plot(elk, add=T)
@@ -33,6 +33,7 @@ ndvi <- projectRaster(test, crs = elk@crs)
 plot(elk)
 plot(ndvi, add=T)
 #yasssss
+
 
 
 
@@ -251,3 +252,105 @@ for (i in 1:length(years)) {
     #            format = "GTiff")
   }
 }
+
+
+
+
+#### old and probably useless preparatory code ####
+      #  sudafed's a hell of a drug #
+
+# test reading in ndviamp
+test <- raster("./NDVIamp/NDVIamp2006.tif")
+
+# match area of interest projection to ndviamp projection
+# DONT FORGET YOULL NEED TO CHANGE BACK LATER
+
+crs(test)
+aoirast <- raster(aoi)
+testreproj <- projectRaster(aoirast, crs = crs(test))
+crs(aoirast)
+plot(aoirast)
+plot(aoi)
+
+(crs = "+proj=laea +lat_0=45 +lon_0=-100 +x_0=0 +y_0=0 +a=6370997 +b=6370997 +units=m
++no_defs")
+
+
+crs(aoi)
+# match ndviamp projection to area of interest projection
+
+testreproj <- projectRaster(test, crs = "+proj=lcc +lat_1=45 +lat_2=49 +lat_0=44.25 +lon_0=-109.5 +x_0=600000 +y_0=0
+                            +ellps=GRS80 +units=m +no_defs")
+testcrop <- crop(test, aoi)
+
+
+
+
+#### why am i having issues reprojecting??? ####
+
+aoi <- spTransform(aoiraw, crs = ampstk@layers[[1]]@crs)
+aoi <- spTransform(aoiraw, crs(ampstk))
+crs(aoi)
+# um ok, apparently i'm not
+
+
+
+
+#### figuring out how to id correct layers from bricks ####
+
+
+tpopyr <- popnyr[1,]
+tpopyr$Herd <- factor(tpopyr$Herd)
+names(ampstk)
+class(ampstk@layers) # this is a list of RasterLayers (1 for each year)
+class(ampstk@layers[[1]]) # this is the first RasterLayer
+#ooh ooh lapply
+?lapply # returns a list based on a function
+  # so this could possibly list yrs but i'm still not sure how to pull the ones i want
+
+# ok back up
+tpopyr$Year
+# year of interest is 2011
+# pull amp 2011 from stk
+
+test <- subset(ampcrop, 1)
+names(test)
+# this pulls amp2001
+
+test <- subset(ampcrop, 1:2)
+names(test)
+# pulls 2001 and 2002, of course
+
+# PLAN: create index mapping year to number (2004 = 1, 2005 = 2, etc...)
+
+y <- c(1, 2, 3)
+test <- subset(ampcrop, y)
+names(test)
+# excellent, this does pull all 3 years
+str(popnyr$Year)
+
+popdat <- popnyr %>%
+  select(-nIndiv) %>%
+  mutate(yIndex = Year-2003,
+         Pop = ifelse(Herd == "Blacktail", "bla",
+               ifelse(Herd == "Border", "bor",
+               ifelse(Herd == "Dome", "dom",
+               ifelse(Herd == "East Fork", "efk", 
+               ifelse(Herd == "Elkhorns", "elk",
+               ifelse(Herd == "Greeley", "grl",
+               ifelse(Herd == "HD314", "gal",
+               ifelse(Herd == "Madison", "mad",
+               ifelse(Herd == "Mill Creek", "mil",
+               ifelse(Herd == "NMadison", "nmd",
+               ifelse(Herd == "Pioneers", "pio",
+               ifelse(Herd == "Sage Creek", "sge",
+               ifelse(Herd == "Sapphire", "sap",
+               ifelse(Herd == "Silver Run", "sil",
+               ifelse(Herd == "Tobacco Roots", "tob",
+               ifelse(Herd == "West Fork", "wfk", 
+                      NA)))))))))))))))))
+
+
+# indexing correct home range from spolydf
+str(popnhrs@polygons[[1]]@Polygons[[1]])
+
