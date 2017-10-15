@@ -110,7 +110,7 @@
     # identify yr with most indivs
     filter(nIndiv == max(nIndiv),
            nIndiv > 2, # 2 indivs per grp not enough
-           Year > 2004) %>% # no ndvi data prior to 2005
+           Year > 2004) %>% # need 5+ yrs NDVIamp/ti per popn
     ungroup() 
   write.csv(popnyrs, file = "popns-yrs.csv", row.names = F)
   sum(popnyrs$nIndiv) # print total indivs
