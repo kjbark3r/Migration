@@ -78,6 +78,10 @@
   write.csv(fixedcap, file = "capdat-allindivs.csv", row.names = F)
   
   
+  # close database connection
+  odbcClose()
+  
+  
 
   
 ### ### ### ### ### ###
@@ -86,7 +90,10 @@
 
 
   
-####  Identify populations and years of interest  ####
+####  POPULATIONS  ####
+  
+  
+  # identify populations (and years) to include in analysis
   
   popnyrs <- rawlocs %>%
     # remove bulls, NA locations, and ski hill elk
@@ -117,10 +124,8 @@
     
 
   
-####  Identify individuals and locations of interest ####
-
-  
   # determine last date of capture for each popn
+  
   capdates <- fixedcap %>%
     filter(!is.na(CaptureDate)) %>%
     mutate(Year = substr(CaptureDate, 0, 4)) %>%
@@ -136,8 +141,13 @@
     ungroup()
     
 
+
+  
+####  INDIVIDUALS ####
+  
   
   # only keep locs not collected during capture of that popn
+     
   locs <- rawlocs %>%
     filter(Sex == "F" & !is.na(Latitude)) %>%
     anti_join(rmelk, by = "AnimalID") %>%
@@ -160,22 +170,50 @@
     filter(MaxMonth > 11)
   write.csv(locs, file = "locs.csv", row.names = F)
 
+  
+  ## -skip spot- ####
+    rm(channel)
+    fixedcap <- read.csv("capdat-allindivs.csv")
+    popnyrs <- read.csv("popns-yrs.csv")
+    locs <- read.csv("locs.csv")
+  
   # sanity check- verify capture and collar data id'd same #indivs
   length(unique(locs$AnimalID)); sum(popnyrs$nIndiv)  # yes, n=356
   
 
-  # filter capture data to only include individuals of interest
-  # and only keep original capture data for those who were recaptured
+  # identify individuals of interest
   indivs <- data.frame(AnimalID = unique(locs$AnimalID))
-  allcap <- fixedcap %>%
+  
+  # individual data - herd, age during year of interest, some capture info
+  indivcap <- fixedcap %>%
     semi_join(indivs, by = "AnimalID") %>%
-    arrange(AnimalID, CaptureDate)
-  cap <- allcap[!duplicated(allcap$AnimalID),]
-  write.csv(cap, file = "capdat.csv", row.names = F)
+    # only keep original capture info for indivs captured >1x
+    group_by(AnimalID) %>% 
+    arrange(CaptureDate) %>% 
+    slice(1) %>%  
+    ungroup() %>%
+    # remove stored data about herds not to be used in analysis
+    mutate(Herd = factor(Herd)) %>%
+    # determine animal age during year of interest
+    rename(CaptureAge = Age) %>%
+    left_join(popnyrs, by = "Herd") %>%
+    mutate(CaptureYear = as.integer(substr(CaptureDate, 0, 4)),
+           Age = CaptureAge + (Year - CaptureYear)) %>%
+    # create dummary variable for whether indiv is >10yrs old
+    mutate(Old = as.factor(ifelse(Age >= 10, 1, 0))) %>%
+    # clean up dataframe
+    select(AnimalID, Herd, CaptureArea, CaptureDate, CaptureYear, 
+           Serology, Age_Type, Age, Old)
+  write.csv(indivcap, "indiv-dat.csv", row.names = F)
+    
+
+    
+
+    
+    
+
   
 
-# POSSIBLE ADDITIONAL TASKS TO INCLUDE HERE
-  
-  # create dataframe of indiv, ageDURINGYEAR OF INTEREST, popn, year?
+
   
 
