@@ -861,3 +861,117 @@ writeOGR(buff,
          layer = "AllElkYrHR", 
          driver = "ESRI Shapefile",
          overwrite_layer = TRUE)
+
+
+
+#### KDE OF BORDER (CLARKS FORK) HERD (FOR WY DATA REQUEST) ####
+
+locs <- read.csv("locs.csv") %>%
+  filter(Herd == "Border")
+
+library(adehabitatHR)
+xy <- data.frame("x"=locs$Long,"y"=locs$Lat)
+ll <- SpatialPointsDataFrame(xy, locs, proj4string = latlong)
+# kde <- kernelUD(ll, h="href", grid = 10000)
+# raster <- raster(kde)
+# writeRaster(raster, 
+#             paste0("../GIS/Shapefiles/Elk/PopnHRs/", "bor-HRyr"), 
+#             format="GTiff", overwrite=TRUE)
+# # never mind, that takes for damn ever
+
+mcp <- mcp(ll, percent = 100)
+## export population home ranges
+writeOGR(mcp, 
+         dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
+         layer = "bor-HRyr-mcp", 
+         driver = "ESRI Shapefile",
+         overwrite = TRUE)
+
+
+
+#### Discrepancy bt # indivs in indiv df and from popn df ####
+
+
+# (at least one) issue is that all of HD314 gets dropped
+# this happens when semi_join by herd and year
+# but does not happen when semi_join by just herd
+
+# winter locations (to create individual winter home ranges)
+indivlocswin <- locs %>%
+  mutate(Year = as.numeric(substr(Date, 0, 4)),
+         Month = as.numeric(substr(Date, 6, 7))) %>%
+  # only locns collected during winter (dec-feb, note captures didn't start until jan)
+  filter(Month == 12 | Month == 1 | Month == 2) %>%
+  # map december locs to following year's winter
+  mutate(Year = ifelse(Month == 12, Year + 1, Year))
+
+# quick summary info
+length(unique(indivlocswin$Herd))
+unique(indivlocswin$Herd)
+
+# HD314 is gone
+hd314 <- filter(locs, Herd == "HD314")
+View(hd314)
+unique(hd314$Year)
+popnyrs[popnyrs$Herd == "HD314", 2]
+str(indivlocswin) # yr is numeric
+str(popnyrs) # yr is numeric
+  # huh. no idear. pick it up in the morning
+
+
+## take 2 ##
+
+# data frame before join fucks it up
+test <- locs %>%
+  mutate(Year = as.numeric(substr(Date, 0, 4)),
+         Month = as.numeric(substr(Date, 6, 7))) %>%
+  # only locns collected during winter (dec-feb, note captures didn't start until jan)
+  filter(Month == 12 | Month == 1 | Month == 2) %>%
+  # map december locs to following year's winter
+  mutate(Year = ifelse(Month == 12, Year + 1, Year))
+
+unique(test[test$Herd == "HD314", 11])
+popnyrs[popnyrs$Herd == "HD314", 2]
+
+# ok issue is
+# in the locations db, the only recorded year for HD314 is 2010
+# but i identified 2009 as the year of interest
+# so now to figure out if i have to admit to the biologists
+# that i'm an idiot and need a popn estimate for a different year
+
+# hd314 was captured in one session, mar 21-29, 2009
+  # ok so when i pull out only winter locations, they by definition can't be 2009
+  # that's the issue
+  # how long did collars stay on?
+    # the good news is, this is the only herd you should have to worry about this with
+  # maxof dates from GPS_Herd_TimePeriod table in Access db shows most stay on thru
+  # the following winter of 2010 and drop off in either april or july of 2010
+
+# ugh, only have 1 full year of data for them starting in late march
+# switching to wordvom doc to ponder whether we can use this population
+
+
+
+
+#### verifying kept original (not last) capture info for indivs captured >1x ####
+  which(duplicated(fixedcap$AnimalID))
+  a <- fixedcap[213:216,]
+  fixedcap[fixedcap$AnimalID == unique(a$AnimalID),]
+  allcap[allcap$AnimalID == unique(a$AnimalID),]
+  # check
+  rm(a, allcap)
+
+  
+#### determining whether have enough data to actually estimate winter hrs for all pops ####
+  
+  testi <- indivcap %>%
+    mutate(CapMo = substr(CaptureDate, 6, 7))
+unique(test$CapMo)
+
+testp <- testi %>%
+  mutate(Date = as.Date(CaptureDate, format = "%Y-%m-%d")) %>%
+  group_by(Herd) %>%
+  summarise(FirstCap = min(Date), LastCap = max(Date))
+
+fks <- filter(testi, Herd == "East Fork" | Herd == "West Fork")
+
