@@ -22,7 +22,6 @@
     library(rgdal) # latlong/stateplane conversions
     library(gsubfn) # no idea, possibly unnecessary
     library(maptools) # writeSpatialShape
-    library(ggmap) # in case you want to plot in R
     library(dplyr) # joins, data work, general awesomeness
   
   
@@ -75,12 +74,8 @@
   
     
   #### Define and subset info relevant for popn home ranges ####
-    
-    
 
-    
-    
-    
+       
     # growing season (for covariate extractions)
     popnlocsgrow <- allcowlocs %>%
       mutate(Year = as.numeric(substr(Date, 0, 4)),
@@ -91,49 +86,49 @@
       filter(Month >= 05 & Month <= 08)  %>%
       # remove stored data about filtered out herds (too few indivs)
       mutate(Herd = factor(Herd))
-    
-    
+
+
+    # winter (for density estimates)
+    popnlocswin <- allcowlocs %>%
+        mutate(Year = as.numeric(substr(Date, 0, 4)),
+               Month = as.numeric(substr(Date, 6, 7))) %>%
+        # only locns collected during winter
+        filter(Month == 12 | Month == 1 | Month == 2) %>%
+        # map december locs to following year's winter
+        mutate(Year = ifelse(Month == 12, Year + 1, Year)) %>%
+        # only keep indivs from popns and years interest
+        semi_join(popnyrs, by = c("Herd", "Year")) %>%
+        # remove stored data about filtered out herds (too few indivs)
+        mutate(Herd = factor(Herd))
+
+
+
+  #### Define and subset info relevant for indiv home ranges  ####
 
     
-    # #### * IN PROGRESS * ####
-    # 
-    # # winter (for density estimates)
-    # ## need to define winter as including previous year's december,
-    # ## and maybe november (depends on timing of population estimates)
-    #     popnlocsgrowwin <- allcowlocs %>%
-    #   mutate(Year = as.numeric(substr(Date, 0, 4)),
-    #          Month = as.numeric(substr(Date, 6, 7))) %>%
-    #   # only keep indivs from popns and years interest
-    #   semi_join(popnyrs, by = c("Herd", "Year")) %>%
-    #   # only locns collected during growing season (may-aug)
-    #   filter(Month >= 05 & Month <= 08)  %>%
-    #   # remove stored data about filtered out herds (too few indivs)
-    #   mutate(Herd = factor(Herd))
-    # 
-    # #### *  * ####
-    #     
-    # 
-    # 
-    # #### Define and subset info relevant for indiv home ranges  ####
-    # 
-    #   #### * IN PROGRESS * ####
-    # 
-    #   ## below code loses some indivs for some reason
-    #   ## you should probably figure that out
-    #   ## (already started in troubleshooting-locs)
-    #   indivlocs <- locs %>%
-    #     mutate(Year = as.numeric(substr(Date, 0, 4)),
-    #            Month = as.numeric(substr(Date, 6, 7))) %>%
-    #     # only locns collected during winter (dec-feb, but captures didn't start until jan)
-    #     filter(Month >= 01 & Month <= 03)  %>%
-    #     # remove stored data about filtered out herds (too few indivs)
-    #     mutate(Herd = factor(Herd)) %>%
-    #     group_by(AnimalID) %>%
-    #     filter(n() > 5)
-    # 
-    #   #### *  * ####
+    # winter locations (to create individual winter home ranges)
+    indivlocswin <- locs %>%
+      mutate(Year = as.numeric(substr(Date, 0, 4)),
+             Month = as.numeric(substr(Date, 6, 7))) %>%
+      # only locns collected during winter (dec-feb, note captures didn't start until jan)
+      filter(Month == 12 | Month == 1 | Month == 2) %>%
+      # map december locs to following year's winter
+      mutate(Year = ifelse(Month == 12, Year + 1, Year)) %>%
+      # only keep indivs from popns and years interest
+      semi_join(popnyrs, by = c("Herd", "Year")) %>%
+      # remove stored data about filtered out herds (too few indivs)
+      mutate(Herd = factor(Herd)) %>%
+      # only locns collected during winter 
+      filter(Month == 12 | Month == 1 | Month == 2) %>%
+      # remove stored data about filtered out herds (too few indivs)
+      mutate(Herd = factor(Herd)) %>%
+      # only indivs with at least 5 relocs (min required for hr estimation)
+      group_by(AnimalID) %>%
+      filter(n() > 5)
+    
 
-  
+
+      
 ### ### ### ### ### ##
 ####  |POPN HRS|  ####
 ### ### ### ### ### ##
@@ -212,23 +207,20 @@
 ### ### ### ### ### ###
   
   
-  
-  #### * IN PROGRESS * ####
-  #  pending above fixes  #
 
   #### get xy points; write to dataframe, to spatial data frame, to stateplane ####
-  xy <- data.frame("x"=indivlocs$Long,"y"=indivlocs$Lat)
-  spdf.ll <- SpatialPointsDataFrame(xy, indivlocs, proj4string = latlong)
+  xy <- data.frame("x"=indivlocswin$Long,"y"=indivlocswin$Lat)
+  spdf.ll <- SpatialPointsDataFrame(xy, indivlocswin, proj4string = latlong)
   spdf.sp <- spTransform(spdf.ll,stateplane)
   
+  # #### * IN PROGRESS * ####
+  # #### estimate mcp for each indiv #### - OR KDE??
+  # indivhrswin <- mcp(spdf.sp[,1], percent = 100) #,1 = AnimalID
+  # #### * * ####
   
-  #### estimate mcp for each indiv ####
-  indivhrs <- mcp(spdf.sp[,1], percent = 100) #,1 = AnimalID
   
-  
-  
-  #### export population home ranges ####
-  writeOGR(indivhrs, 
+  #### export individual home ranges ####
+  writeOGR(indivhrswin, 
            dsn = "../GIS/Shapefiles/Elk", 
            layer = "IndivWinHRs", 
            driver = "ESRI Shapefile",
