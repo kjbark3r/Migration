@@ -151,7 +151,7 @@
     spdf.ll <- SpatialPointsDataFrame(xy, popnlocsall, proj4string = latlong)
     spdf.sp <- spTransform(spdf.ll,stateplane)
     
-    ## export all locs of all elk in popns and yrs of interest
+        ## export all locs of all elk in popns and yrs of interest
     writeOGR(spdf.sp,
              verbose = TRUE,
              dsn = "../GIS/Shapefiles/Elk", 
@@ -159,6 +159,7 @@
              driver = "ESRI Shapefile",
              overwrite_layer = TRUE)
     
+   
     ## estimate hrs for all elk together
     popnhrsallkde <- kernelUD(spdf.sp, grid = 110)
     popnhrsoutline <- getverticeshr(popnhrsallkde, percent = 100)
@@ -169,6 +170,22 @@
              verbose = TRUE,
              dsn = "../GIS/Shapefiles/Elk", 
              layer = "AllElkPrelimHR", 
+             driver = "ESRI Shapefile",
+             overwrite_layer = TRUE)
+    
+    
+    ## estimate full yr hrs for each popn separately
+    popnhrskde <- kernelUD(spdf.sp[,3], grid = 120) #,3 is Herd
+    popnhrs <- getverticeshr(popnhrskde, percent = 99)
+    
+    ## add year of interest
+    popnhrs@data <- left_join(popnhrs@data, popnyrs, by = c("id" = "Herd"))
+    
+    ## export full year hr for each popn
+    writeOGR(popnhrs,
+             verbose = TRUE,
+             dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
+             layer = "PopnYrHRs", 
              driver = "ESRI Shapefile",
              overwrite_layer = TRUE)
     
@@ -187,7 +204,7 @@
   
     ## export population home ranges
       writeOGR(popnhrs, 
-           dsn = "../GIS/Shapefiles/Elk", 
+           dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
            layer = "PpnGrowingSsnHRs", 
            driver = "ESRI Shapefile",
            overwrite = TRUE)
