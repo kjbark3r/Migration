@@ -129,25 +129,27 @@
   sum(popnyrs$nIndiv) # print total indivs
     
 
-  
-  # determine last date of capture for each popn
+  # summary capture info for each popn ####
   
   capdates <- fixedcap %>%
-    filter(!is.na(CaptureDate)) %>%
-    mutate(Year = substr(CaptureDate, 0, 4)) %>%
-    # only for popns and years of interest
-    semi_join(popnyrs, by = c("Herd", "Year")) %>%
+    filter(!is.na(CaptureDate) & Sex == "F") %>%
     # determine month of capture
     mutate(CaptureMonth = as.numeric(substr(CaptureDate, 6, 7))) %>%
-    # determine last date of capture for each popn
-    group_by(Herd) %>%
+    mutate(Year = substr(CaptureDate, 0, 4)) %>%
+    # only keep herds and years of interest
+    semi_join(popnyrs, by = c("Herd", "Year")) %>%
     # account for e/w fork captures starting in nov for subsequent yr
     filter(CaptureMonth < 10) %>%
-    summarise(LastCapDate = max(CaptureDate)) %>%
+    # determine first and last capture date per popn
+    group_by(Herd, Year) %>%
+    summarise(FirstCapDate = min(CaptureDate),
+              LastCapDate = max(CaptureDate),
+              nIndiv = n_distinct(AnimalID)) %>% # just for general idea
     ungroup()
+  sum(capdates$nIndiv) # note incls more indivs than we can actually use
+  write.csv(capdates, file = "popn-capdates.csv", row.names=F)
     
-
-
+    
   
 ####  INDIVIDUALS ####
   
