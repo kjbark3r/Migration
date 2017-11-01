@@ -49,7 +49,7 @@
       # add population code that matches start of tif filenames
       popdat <- popnsyrs %>%
         mutate(Pop = ifelse(Herd == "Blacktail", "bla",
-                     ifelse(Herd == "Border", "bor",
+                     ifelse(Herd == "Clarks Fork", "cfk",
                      ifelse(Herd == "Dome", "dom",
                      ifelse(Herd == "East Fork", "efk", 
                      ifelse(Herd == "Elkhorns", "elk",
@@ -87,7 +87,7 @@
         
         # read in 6 yrs ndvi amplitude data (from rasterclip.R)
         files.amp <- list.files(
-            path = "./NDVIamp/processed",
+            path = "./NDVIamp",
             pattern = paste0("^", noquote(pop)),
             full.names = TRUE)
         ampstk <- stack(files.amp)
@@ -95,7 +95,7 @@
         
         # read in 6 yrs time-integrated ndvi data (from rasterclip.R)
         files.ti <- list.files(
-            path = "./NDVIti/processed",
+            path = "./NDVIti",
             pattern = paste0("^", noquote(pop)),
             full.names = TRUE)
         tistk <- stack(files.ti)

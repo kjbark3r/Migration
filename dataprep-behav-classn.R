@@ -40,7 +40,7 @@ if (file.exists(wd_workcomp)) {setwd(wd_workcomp)
 }
 if(file.exists(wd_worklaptop)) {
  channel <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-                              dbq=C:/Users/kristin/Documents/DatabasesEtc/Statewide_Elk_GPS.accdb")
+                              dbq=C:/Users/kristin/Documents/DatabasesEtc/Statewide/Elk/Statewide_Elk_GPS.accdb")
 } else {  cat("Maybe you shouldn't have been so lazy when you made this code") }
 rm(wd_workcomp, wd_laptop, wd_worklaptop)
 

@@ -35,7 +35,7 @@
   }
   if(file.exists(wd_worklaptop)) {
    channel <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-                                dbq=C:/Users/kristin/Documents/DatabasesEtc/Statewide_Elk_GPS.accdb")
+                                dbq=C:/Users/kristin/Documents/DatabasesEtc/Statewide/Elk/Statewide_Elk_GPS.accdb")
   } else {  cat("Maybe you shouldn't have been so lazy when you made this code") }
   rm(wd_workcomp, wd_laptop, wd_worklaptop)
 
@@ -58,28 +58,37 @@
 #### alterations/fixes prior to actual summaries and analyses ####
 
   
-  # remove indivs that should not be considered in popn HR estimation
-  # ("ski hill" elk from sapphires and bulls from any population)
+  ## individual location data ##
+
   rmelk <- filter(rawcap, CaptureArea == "Ski Hill") # this also removes NAs
   allcowlocs <- rawlocs %>%
+    # remove bulls, missing locations, and "ski hill" elk
     filter(Sex == "F" & !is.na(Latitude)) %>%
-    anti_join(rmelk, by = "AnimalID")
+    anti_join(rmelk, by = "AnimalID") %>%
+    # remove trailing whitespace from Madison herd name
+    mutate(Herd = trimws(Herd)) %>%
+    # rename S Pioneers and W Pioneers as Pioneers; rename Border to Clarks Fork
+    mutate(Herd = ifelse(grepl("Pioneer", Herd), "Pioneers",
+                         ifelse(Herd == "Border", "Clarks Fork", Herd)))
   write.csv(allcowlocs, file = "locs-allcows.csv", row.names = F)  
   
   
-  # remove trailing whitespace from Madison herd name;
-  # identify South Pioneers and West Pioneers as Pioneers;
-  # remove "ski hill" elk
+  ## capture data ##
+  
   fixedcap <- rawcap %>%
+    # remove trailing whitespace from Madison herd name
     mutate(Herd = trimws(Herd)) %>%
-    mutate(Herd = ifelse(grepl("Pioneer", Herd), "Pioneers", Herd)) %>%
+    # rename S Pioneers and W Pioneers as Pioneers; rename Border to Clarks Fork
+    mutate(Herd = ifelse(grepl("Pioneer", Herd), "Pioneers",
+                         ifelse(Herd == "Border", "Clarks Fork", Herd))) %>%
     filter(AnimalID != "") %>%
+    # remove "ski hill" elk
     anti_join(rmelk, by = "AnimalID")
   write.csv(fixedcap, file = "capdat-allindivs.csv", row.names = F)
   
   
   # close database connection
-  odbcClose()
+  odbcCloseAll()
   
   
 
@@ -95,10 +104,7 @@
   
   # identify populations (and years) to include in analysis
   
-  popnyrs <- rawlocs %>%
-    # remove bulls, NA locations, and ski hill elk
-    filter(Sex =="F" & !is.na(Latitude)) %>% 
-    anti_join(rmelk, by = "AnimalID") %>%
+  popnyrs <- allcowlocs %>%
     # format and create date/time/year/month columns
     within(Date <- as.Date(Date)) %>%
     within(Time <- strftime(Time, format="%H:%M:%S")) %>%
@@ -148,9 +154,7 @@
   
   # only keep locs not collected during capture of that popn
      
-  locs <- rawlocs %>%
-    filter(Sex == "F" & !is.na(Latitude)) %>%
-    anti_join(rmelk, by = "AnimalID") %>%
+  locs <- allcowlocs %>%
     # format and create date/time/year/month columns
     within(Date <- as.Date(Date)) %>%
     within(Time <- strftime(Time, format="%H:%M:%S")) %>%
@@ -197,7 +201,8 @@
     # determine animal age during year of interest
     rename(CaptureAge = Age) %>%
     left_join(popnyrs, by = "Herd") %>%
-    mutate(CaptureYear = as.integer(substr(CaptureDate, 0, 4)),
+    mutate(Year = as.integer(Year),
+           CaptureYear = as.integer(substr(CaptureDate, 0, 4)),
            Age = CaptureAge + (Year - CaptureYear)) %>%
     # create dummary variable for whether indiv is >10yrs old
     mutate(Old = as.factor(ifelse(Age >= 10, 1, 0))) %>%

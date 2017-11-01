@@ -64,7 +64,7 @@
     
     # NDVI amplitude (from https://phenology.cr.usgs.gov/get_data_250w.php)
     files.amp <- list.files(
-        path = "./NDVIamp/",
+        path = "../DatabasesEtc/Statewide/NDVIamp/",
         pattern = "tif$",
         full.names = TRUE)
     ampstk <- stack(files.amp)
@@ -73,7 +73,7 @@
     
     # time-integrated NDVI (from https://phenology.cr.usgs.gov/get_data_250w.php)
     files.ti <- list.files(
-      path = "./NDVIti/",
+      path = "../DatabasesEtc/Statewide/NDVIti/",
       pattern = "tif$",
       full.names = TRUE)
     tistk <- stack(files.ti)
@@ -90,7 +90,7 @@
       select(-nIndiv) %>%
       mutate(yrIndex = Year-2000, # yrindex 1 is 2001
              Pop = ifelse(Herd == "Blacktail", "bla",
-                   ifelse(Herd == "Border", "bor",
+                   ifelse(Herd == "Clarks Fork", "cfk",
                    ifelse(Herd == "Dome", "dom",
                    ifelse(Herd == "East Fork", "efk", 
                    ifelse(Herd == "Elkhorns", "elk",
@@ -131,8 +131,8 @@
     
     
     # set output paths
-    ampout <- "./NDVIamp/processed/"
-    tiout <- "./NDVIti/processed/"    
+    ampout <- "./NDVIamp/"
+    tiout <- "./NDVIti/"    
     
     
 
