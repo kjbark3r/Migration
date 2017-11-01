@@ -975,3 +975,59 @@ testp <- testi %>%
 
 fks <- filter(testi, Herd == "East Fork" | Herd == "West Fork")
 
+
+#### just figuring out how to ask number of indivs in a specific herd ####
+
+length(unique(popnlocsall$Herd))
+length(which(popnlocsall$Herd == "Tobacco Roots"))
+?n_distinct # same as length(unique()) just faster or whatever
+popnlocsall %>% filter(Herd == "Tobacco Roots") %>% summarise(n_distinct(AnimalID))
+
+
+
+#### determining whether can estimate winHR for tobacco roots (late capture) ####
+
+tob <- filter(popnlocsall, Herd == "Tobacco Roots") %>%
+  mutate(Season = ifelse(Month == 12 | Month == 1 | Month == 2, "Winter",
+         ifelse(Month == 3 | Month == 4 | Month == 5, "Spring",
+         ifelse(Month == 6 | Month == 7 | Month == 8, "Summer", "Fall"))))
+unique(tob$Year)
+tobtime <- filter(tob, Month == 2 | Month == 3 | Month == 4 | Month == 5)
+#### get xy points; write to dataframe, to spatial data frame, to stateplane ####
+xyt <- data.frame("x"=tobtime$Long,"y"=tobtime$Lat)
+spdf.llt <- SpatialPointsDataFrame(xyt, tobtime, proj4string = latlong)
+spdf.spt <- spTransform(spdf.llt,stateplane)
+
+writeOGR(spdf.spt, 
+         dsn = "../GIS/Shapefiles/Elk/zOldMisc", 
+         layer = "Tob-Winsprlocs", 
+         driver = "ESRI Shapefile",
+         overwrite = TRUE)
+
+
+#### ditto madison (late capture) ####
+
+popnlocsall %>% filter(Herd == "Madison") %>% summarise(n_distinct(AnimalID))
+
+mad <- filter(popnlocsall, Herd == "Madison") %>%
+  mutate(Season = ifelse(Month == 12 | Month == 1 | Month == 2, "Winter",
+                         ifelse(Month == 3 | Month == 4 | Month == 5, "Spring",
+                                ifelse(Month == 6 | Month == 7 | Month == 8, "Summer", "Fall"))))
+unique(mad$Year)
+madtime <- filter(mad, Month == 2 | Month == 3 | Month == 4 | Month == 5)
+#### get xy points; write to dataframe, to spatial data frame, to stateplane ####
+xym <- data.frame("x"=madtime$Long,"y"=madtime$Lat)
+spdf.llm <- SpatialPointsDataFrame(xym, madtime, proj4string = latlong)
+spdf.spm <- spTransform(spdf.llm,stateplane)
+
+writeOGR(spdf.spm, 
+         dsn = "../GIS/Shapefiles/Elk/zOldMisc", 
+         layer = "Mad-Winsprlocs", 
+         driver = "ESRI Shapefile",
+         overwrite = TRUE)
+
+madindiv <- madtime %>%
+  group_by(AnimalID) %>%
+  summarise(Indivs = unique(AnimalID)) %>%
+  dplyr::select(AnimalID)
+write.csv(madindiv, "../GIS/Data/zMisc/madisonindivs.csv", row.names=F)
