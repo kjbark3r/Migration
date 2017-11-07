@@ -124,7 +124,10 @@
       mutate(Herd = factor(Herd)) %>%
       # only indivs with at least 5 relocs (min required for hr estimation)
       group_by(AnimalID) %>%
-      filter(n() > 5)
+      filter(n() > 5) %>%
+      ungroup() %>%
+      # remove stored data about filtered out indivs (too few locs)
+      mutate(AnimalID = factor(AnimalID))
     
 
 
@@ -236,7 +239,7 @@
     
 
     
-  #### Winter #### [in progress]
+  #### Winter #### 
   
     ## get xy points; write to dataframe, to spatial data frame, to stateplane
     spdf.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=popnlocswin$Long,"y"=popnlocswin$Lat),
@@ -273,15 +276,20 @@
   
 
   #### get xy points; write to dataframe, to spatial data frame, to stateplane ####
-  xy <- data.frame("x"=indivlocswin$Long,"y"=indivlocswin$Lat)
-  spdf.ll <- SpatialPointsDataFrame(xy, indivlocswin, proj4string = latlong)
-  spdf.sp <- spTransform(spdf.ll,stateplane)
+  spdf.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=indivlocswin$Longitude,"y"=indivlocswin$Latitude), 
+                                                indivlocswin, proj4string = latlong), stateplane)
   
-  # #### * IN PROGRESS * ####
-  # #### estimate kde for each indiv #### 
-  # indivhrswin <- mcp(spdf.sp[,1], percent = 100) #,1 = AnimalID
-  # #### * * ####
+  # estimate mcp
+  indivhrswin.mcp <- mcp(spdf.sp[,"AnimalID"], percent = 100)
+  plot(indivhrswin.mcp)
   
+  
+  #### IN PROGRESS #### - grid/extent issue as usual
+  # estimate kde
+  indivhrswin.kdeprelim <- kernelUD(spdf.sp[,"AnimalID"], 
+                                    h = "href",
+                                    grid = 1660) 
+  indivhrswin.kde <- getverticeshr(indivhrswin.kdeprelim, percent = 95)
   
   #### export individual home ranges ####
   writeOGR(indivhrswin, 
