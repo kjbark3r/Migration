@@ -76,7 +76,7 @@
   #### Define and subset info relevant for popn home ranges ####
 
        
-    # growing season (for covariate extractions)
+    # growing season locations (for covariate extractions)
     popnlocsgrow <- allcowlocs %>%
       mutate(Year = as.numeric(substr(Date, 0, 4)),
              Month = as.numeric(substr(Date, 6, 7))) %>%
@@ -88,7 +88,7 @@
       mutate(Herd = factor(Herd))
 
 
-    # winter (for density estimates)
+    # winter locations (for density estimates)
     popnlocswin <- allcowlocs %>%
         mutate(Year = as.numeric(substr(Date, 0, 4)),
                Month = as.numeric(substr(Date, 6, 7))) %>%
@@ -151,13 +151,31 @@
     spdf.ll <- SpatialPointsDataFrame(xy, popnlocsall, proj4string = latlong)
     spdf.sp <- spTransform(spdf.ll,stateplane)
     
-        ## export all locs of all elk in popns and yrs of interest
+    
+    ## export all locs of all elk in popns and yrs of interest
     writeOGR(spdf.sp,
-             verbose = TRUE,
              dsn = "../GIS/Shapefiles/Elk", 
              layer = "AllElkInterestLocs", 
              driver = "ESRI Shapefile",
              overwrite_layer = TRUE)
+   
+     
+    ## export locs separately per population
+    
+    popns <- unique(popnlocsall$Herd)
+    for (i in 1:length(popns)) {
+     popn <- popns[i] 
+     popnlocs <- filter(popnlocsall, Herd == popn)
+     # create and reproject spdf in one line like a fucking boss
+     popn.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=popnlocs$Long,"y"=popnlocs$Lat),
+                                                   popnlocs, proj4string = latlong), stateplane)
+     writeOGR(popn.sp,
+              dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
+              layer = paste0(popn, "-allcowlocs"), 
+              driver = "ESRI Shapefile",
+              overwrite_layer = TRUE)
+    }
+
     
    
     ## estimate hrs for all elk together
@@ -216,9 +234,38 @@
          driver = "ESRI Shapefile",
          overwrite = TRUE)
     
-    
 
+    
+  #### Winter #### [in progress]
   
+    ## get xy points; write to dataframe, to spatial data frame, to stateplane
+    spdf.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=popnlocswin$Long,"y"=popnlocswin$Lat),
+                                                  popnlocswin, proj4string = latlong), stateplane)
+    
+    ## estimate mcp for each population
+    popnhrs <- mcp(spdf.sp[,"Herd"], percent = 100,
+                   unin = "m", unout = "km2")
+  
+    ## export population home ranges
+    writeOGR(popnhrs, 
+         dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
+         layer = "PpnWinHRs", 
+         driver = "ESRI Shapefile",
+         overwrite = TRUE)
+
+    ## export individual locations 
+    writeOGR(spdf.sp, 
+         dsn = "../GIS/Shapefiles/Elk", 
+         layer = "PpnWinLocns", 
+         driver = "ESRI Shapefile",
+         overwrite = TRUE)    
+    
+    ## store winter hr area (for density estimation)
+    write.csv(popnhrs@data, file = "popn-winhr-areas.csv", row.names = F)
+
+
+    
+      
 ### ### ### ### ### ###
 ####  |INDIV HRS|  ####
 ### ### ### ### ### ###
@@ -231,7 +278,7 @@
   spdf.sp <- spTransform(spdf.ll,stateplane)
   
   # #### * IN PROGRESS * ####
-  # #### estimate mcp for each indiv #### - OR KDE??
+  # #### estimate kde for each indiv #### 
   # indivhrswin <- mcp(spdf.sp[,1], percent = 100) #,1 = AnimalID
   # #### * * ####
   
