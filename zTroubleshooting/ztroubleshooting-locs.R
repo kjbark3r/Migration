@@ -1031,3 +1031,87 @@ madindiv <- madtime %>%
   summarise(Indivs = unique(AnimalID)) %>%
   dplyr::select(AnimalID)
 write.csv(madindiv, "../GIS/Data/zMisc/madisonindivs.csv", row.names=F)
+
+
+
+#### checking my db against sapphire locs in statewide db ####
+### bc theres one weird one i can't decide whethr to remove ###
+
+mydat <- read.csv("../DatabasesEtc/collardata-locsonly-equalsampling.csv", as.is = TRUE, header = TRUE)
+# create and reproject spdf in one line like a fucking boss
+mydat.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=mydat$Long,"y"=mydat$Lat),
+                                              mydat, proj4string = latlong), stateplane)
+writeOGR(mydat.sp, 
+         dsn = "../GIS/Shapefiles/Elk/zOldMisc", 
+         layer = "nSapphlocs-mydat", 
+         driver = "ESRI Shapefile",
+         overwrite = TRUE)
+
+
+
+#### ok srsly programmatically defining column to create hr from ####
+# because you somehow lost the code, way to do
+
+# the lame way
+popnhrs <- mcp(spdf.sp[,3], percent = 100) #,3 = Herd
+
+?mcp
+class(spdf.sp[,3]) # spatialpointsdataframe
+str(spdf.sp[,3])
+
+test <- mcp(spdf.sp[,spdf.sp$Herd], percent = 100)
+# undefined columns selected
+
+colnames(spdf.sp)
+#NULL
+
+colnames(spdf.sp@data)
+# this correctly access the names
+
+grepl("Herd", colnames(spdf.sp@data))
+# this correctly finds the column
+
+which(grepl("Herd", colnames(spdf.sp@data)))
+# this correctly finds the column number
+
+test <- mcp(spdf.sp[,which(grepl("Herd", colnames(spdf.sp@data)))])
+plot(test)
+# i'm sure there's a more concise way to do this but whatever
+
+# oh wait. i almost hope this doesn't work
+test2 <- mcp(spdf.sp[,"Herd"], percent = 100)
+plot(test2, col = "red")
+# son of a...
+
+
+#### calc and store hr area
+test2@data$area
+test2@data
+# duh
+
+
+
+#### getting need >5 relocs error in indiv winhr est'n ####
+
+# winter locations (to create individual winter home ranges)
+test <- locs %>%
+  mutate(Year = as.numeric(substr(Date, 0, 4)),
+         Month = as.numeric(substr(Date, 6, 7))) %>%
+  # only locns collected during winter (dec-feb, note captures didn't start until jan)
+  filter(Month == 12 | Month == 1 | Month == 2) %>%
+  # map december locs to following year's winter
+  mutate(Year = ifelse(Month == 12, Year + 1, Year)) %>%
+  # only keep indivs from popns and years interest
+  semi_join(popnyrs, by = c("Herd", "Year")) %>%
+  # remove stored data about filtered out herds (too few indivs)
+  mutate(Herd = factor(Herd)) %>%
+  # only locns collected during winter 
+  filter(Month == 12 | Month == 1 | Month == 2) %>%
+  # remove stored data about filtered out herds (too few indivs)
+  mutate(Herd = factor(Herd)) %>%
+  # only indivs with at least 5 relocs (min required for hr estimation)
+  group_by(AnimalID) %>%
+  filter(n() > 5) # still getting 5 relocs error
+length(unique(test$AnimalID))
+# oh i wonder if its still storing all indivs
+# yep that was it. another duh.
