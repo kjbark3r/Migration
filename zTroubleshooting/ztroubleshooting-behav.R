@@ -50,15 +50,15 @@
   
   
   
-  #### Database connection ####
-  
-  if(file.exists(wd_worklaptop)) {
-    channel <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-                                dbq=C:/Users/kristin/Documents/DatabasesEtc/Statewide/Elk/Statewide_Elk_GPS.accdb")
-  } else {  cat("Maybe you shouldn't have been so lazy when you made this code") }
-
-  
-  
+  # #### Database connection ####
+  # 
+  # if(file.exists(wd_worklaptop)) {
+  #   channel <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
+  #                               dbq=C:/Users/kristin/Documents/DatabasesEtc/Statewide/Elk/Statewide_Elk_GPS.accdb")
+  # } else {  cat("Maybe you shouldn't have been so lazy when you made this code") }
+  # 
+  # 
+  # 
   #### Projections ####
   
   latlong <- CRS("+init=epsg:4326")
@@ -68,11 +68,9 @@
   
   #### "Raw" data ####
   
-  rawlocs <- sqlQuery(channel, paste("select * from ElkGPS"))
-  elev <- raster("../Vegetation/writtenrasters/orig/elev.tif")
-  
-  
-  
+  # rawlocs <- sqlQuery(channel, paste("select * from ElkGPS"))
+  rawlocs <- read.csv("locs-allcows-withelevs.csv")
+
 
       # pull 10 random rows to play with for little tests
       
@@ -82,8 +80,7 @@
       
       
       # keep it clean
-      odbcCloseAll()
-      rm(wd_workcomp, wd_laptop, wd_worklaptop, channel)
+      rm(wd_workcomp, wd_laptop, wd_worklaptop)
   
 
 ### ### ### ### ### ###
@@ -99,16 +96,13 @@
   testlocs <- rawlocs %>%
     # only use Sapph for this trial run
     filter(Herd == "Sapphire") %>%
-    # prep datetime
-    within(DT = as.POSIXct(DT, format = "%Y-%m-%d"),
-           Time <- substr(Time, 12, 19)) %>%
-    # get rid of stored info about removed indivs
-    mutate(AnimalID = factor(AnimalID)) %>%
     # create POSIXct DateTime for ltraj obj
-    mutate(Date = as.POSIXct(paste(DT, Time, sep = " "),
-                             format = "%Y-%m-%d %H:%M:%S")) %>%
+    mutate(Date = as.POSIXct(DateTime, 
+                                 format = "%Y-%m-%d %H:%M:%S")) %>%
+    # remove stored info about filtered out indivs
+    mutate(AnimalID = factor(AnimalID)) %>%
     # randomly select one loc per day per indiv
-    group_by(AnimalID, DT) %>%
+    group_by(AnimalID, Date) %>%
     sample_n(1) %>%
     ungroup()
 
@@ -125,7 +119,8 @@
   # Create ltraj object
   lt <- as.ltraj(xy = testlocs[,c("X", "Y")], 
                  date = testlocs$Date, 
-                 id = testlocs$AnimalID)
+                 id = testlocs$AnimalID,
+                 infolocs = data.frame(elev = testlocs$Elev))
   
   # Sweet baby jesus
   lt
@@ -172,7 +167,7 @@
   
   
     
-  #### Try elevational [IN PROGRESS - NEED ELEVS, DUH] #### 
+  #### Try elevational [IN PROGRESS - got elevs; need to make infolocs field] #### 
   
   # Fit NSD movement model 
   mod.elv <- mvmtClass(lt, fam = "elev")
@@ -185,7 +180,7 @@
   which(!fullmvmt(mod.elv)) # this is them
   fullmvmt(mod.elv, out = "name") # these are the ones they DID fit
   
-  
+  save.image(file = "./zOldAndMisc/nsd-prelim.RData")
 
   
   
@@ -207,6 +202,30 @@
 ## TO DELETE ##
 ### ### ### ###
   
+  
+  # from using access db (DT/Date/Time formatting)
+  # diff now bc using csv i made that includes elevation
+  # and i already made these formatting changes in that csv
+    
+      odbcCloseAll()
+      # Prep original data
+      testlocs <- rawlocs %>%
+        # only use Sapph for this trial run
+        filter(Herd == "Sapphire") %>%
+        # prep datetime
+        within(DT = as.POSIXct(DT, format = "%Y-%m-%d"),
+               Time <- substr(Time, 12, 19)) %>%
+        # get rid of stored info about removed indivs
+        mutate(AnimalID = factor(AnimalID)) %>%
+        # create POSIXct DateTime for ltraj obj
+        mutate(Date = as.POSIXct(paste(DT, Time, sep = " "),
+                                 format = "%Y-%m-%d %H:%M:%S")) %>%
+        # randomly select one loc per day per indiv
+        group_by(AnimalID, DT) %>%
+        sample_n(1) %>%
+        ungroup()
+      
+      
   
   # figuring out the ltraj game
   data(puechabonsp)
