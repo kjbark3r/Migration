@@ -209,7 +209,7 @@
     # create dummary variable for whether indiv is >10yrs old
     mutate(Old = as.factor(ifelse(Age >= 10, 1, 0))) %>%
     # clean up dataframe
-    select(AnimalID, Herd, CaptureArea, CaptureDate, CaptureYear, 
+    dplyr::select(AnimalID, Herd, CaptureArea, CaptureDate, CaptureYear, 
            Serology, Age_Type, Age, Old)
   write.csv(indivcap, "indiv-dat.csv", row.names = F)
     
