@@ -1115,3 +1115,58 @@ test <- locs %>%
 length(unique(test$AnimalID))
 # oh i wonder if its still storing all indivs
 # yep that was it. another duh.
+
+
+
+
+#### DEM WORK ####
+
+#### Troubleshooting ####
+
+
+
+
+
+demshps <- list.files(".", "_13$")
+filenm <- demshps[1]
+rast <- raster(filenm)
+plot(rast)
+
+library(raster)
+test <- raster("grdn44w109_13")
+plot(test)
+
+duplicated(demshps)
+demshps
+
+
+
+
+#### Cut code ####
+
+lay <- substr(filenm, 1, nchar(filenm)-8) # get file name (remove ".shp" extension)
+test <- raster(lay)
+
+r1 <- raster(dems[1]) # create raster of 1st to start
+
+# this works great but gets confusing in loop; try one other thing first
+r1 <- raster(dems[1])
+#r1[] <- 1:ncell(r1)
+r2 <- raster(dems[2])
+#res() # should be same res, yes? check this
+#r2[] <- 1:ncell(r2)  
+x <- list(r1, r2)
+x$filename <- '../zOldAndMisc/test.tif'
+x$overwrite <- TRUE
+m <- do.call(merge, x)
+plot(m)
+
+for(i in 2:length(dems)){
+  r2 <- raster(dems[i])
+  x <- list(r1, r2)
+  x$filename <- '../zOldAndMisc/test.tif'
+  x$overwrite <- TRUE
+  m <- do.call(merge, x)
+  
+  
+}
