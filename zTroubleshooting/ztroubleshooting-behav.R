@@ -118,8 +118,11 @@
       
   # Create ltraj object
   lt <- as.ltraj(xy = testlocs[,c("X", "Y")], 
+                 # note date must be POSIXct
                  date = testlocs$Date, 
+                 # specify indiv (also serves as default burst)
                  id = testlocs$AnimalID,
+                 # specify infolocs to allow elevational mign model
                  infolocs = data.frame(elev = testlocs$Elev))
   
   # Sweet baby jesus
@@ -160,41 +163,211 @@
 
   
   
+  #### figuring out subsetting to full first year of data ####
   
+  #. 1. check whether included locs after 2014 (i.e., full year)
+  test <- testlocs %>%
+    group_by(AnimalID) %>%
+    summarise(MaxDate = max(Date)) %>%
+    ungroup()
+  View(test)
+  # ok yes, but you're keeping ALL the dates. 
+  # need to subset to just that first year -
+  # that's prob part of what's throwing shit off
   
+  testlocs$Date[1]
+  testlocs$Date[2]
   
+  test <- testlocs
+  test$DateLt <- as.POSIXlt(test$Date)
+  test$DateLt[2]
+  test$DateLt[2] + 1 # adds one second
+  test$DateLt[2]$hour
+  unclass(test$DateLt[2])
   
-  
-  
+  # ok what are you doing...
+  # want to remove all locations after one full year
+  # so either remove locations > 365 days after start date
+  # or keep locations < 365 days
     
-  #### Try elevational [IN PROGRESS - got elevs; need to make infolocs field] #### 
+  test2 <- testlocs[1:10,]
+  test2$Day <- as.Date(test2$DateTime)
+  test2$NextYr <- test2$Day + 365 
   
-  # Fit NSD movement model 
-  mod.elv <- mvmtClass(lt, fam = "elev")
-  mod.elv
   
-  # holy balls
+  test3 <- modlocs[1:10,]
+  test3$Day <- as.Date(test3$Date)
+  test3$NextYr <- test3$Day + 365 
   
-  # check out instances where not all mod.elvels were fit
-  length(which(!fullmvmt(mod.elv))) # 17 indivs 
-  which(!fullmvmt(mod.elv)) # this is them
-  fullmvmt(mod.elv, out = "name") # these are the ones they DID fit
   
+
   save.image(file = "./zOldAndMisc/nsd-prelim.RData")
 
-  
-  
-  
-  
-  
-
-  ## ADDITIONAL TASKS ##
-  
-    # figure out subsetting #locs/indiv
-      # want equal sampling effort and dec'd data dependence
 
 
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###  
+  
+#### **FROM INITIAL RUNS, PRE-FOCUSED MODEL TESTING ETC** ####
 
+  
+  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #   
+  
+  ##### FULL SAPPH DATA MODEL RUNS ####
+  
+  #### Default parameters ####
+  
+  ### NSD ### 
+  m.n1 <- mvmtClass(lt)
+  m.n1
+  d.n1 <- data.frame(table(names(topmvmt(m.n1)))) %>%
+    rename(Behav = Var1, m.n1 = Freq)
+  results <- left_join(results, d.n1, by = "Behav")
+  
+  
+  ### Elev ###
+  m.e1 <- mvmtClass(lt, fam = "elev")
+  m.e1
+  d.e1 <- data.frame(table(names(topmvmt(m.e1)))) %>%
+    rename(Behav = Var1, m.e1 = Freq)
+  results <- left_join(results, d.e1, by = "Behav")  
+  
+  
+  # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+  
+  #### Tweaked: Minimum distance bt ranges ####  
+  
+  #### NSD, minimum distance 1km, tweaked in topmvmt() #### 
+  m.n2 <- topmvmt(m.n1, mdelta = 1000)
+  m.n2
+  d.n2 <- data.frame(table(names(m.n2))) %>%
+    rename(Behav = Var1, m.n2 = Freq)
+  results <- left_join(results, d.n2, by = "Behav")
+  
+  #### NSD, minimum distance 0.5km, tweaked in topmvmt() #### 
+  m.n3 <- topmvmt(m.n1, mdelta = 500)
+  m.n3
+  d.n3 <- data.frame(table(names(m.n3))) %>%
+    rename(Behav = Var1, m.n3 = Freq)
+  results <- left_join(results, d.n3, by = "Behav")
+  
+  # essentially what this tweak is doing is moving all indivs
+  # from mixmig and disperser to (mostly) res and nomad
+  # their results are identical
+  
+  
+  #### NSD, minimum distance 1km, tweaked in mvmtClass() ####  
+  pest.m.n4 <- pEst(l.d = 1000)
+  m.n4 <- mvmtClass(lt, p.est = pest.m.n4)
+  m.n4
+  d.n4 <- data.frame(table(names(topmvmt(m.n4)))) %>%
+    rename(Behav = Var1, m.n4 = Freq)
+  results <- left_join(results, d.n4, by = "Behav")
+  
+  # this tweak keeps a moderate amount of mixmig
+  # and then calls almost everyone else nomad ,w 4 migs
+  
+  # ok. so if i tweak distance parameter after the model's run,
+  # it favors mostly resident, some nomad (just a couple mig)
+  # whereas if i tweak distance in the initial model specification,
+  # everyone's evenly split bt nomad and mixmig with just a few mig
+  # so tweaked after the model's run (as suggested by spitz)
+  # makes the most sense and produces the expected effect
+  
+  
+  
+  #### NSD, minimum distance 1km, don't penalize complex models, tweaked in topmvmt() #### 
+  # idea here is to allow more mixedmig classifications, maybe?
+  m.n5 <- topmvmt(m.n1, mdelta = 1000, a.rule = F)
+  m.n5
+  d.n5 <- data.frame(table(names(m.n5))) %>%
+    rename(Behav = Var1, m.n5 = Freq)
+  results <- left_join(results, d.n5, by = "Behav")
+  
+  # no, that made no difference, so it's not just the penalized model complexity
+  # that's keeping it from classifying behavior as mixedmig
+  
+  
+  #### Elev, minimum distance 1km, tweaked in topmvmt() #### 
+  m.e2 <- topmvmt(m.e1, mdelta = 1000)
+  m.e2
+  d.e2 <- data.frame(table(names(m.e2))) %>%
+    rename(Behav = Var1, m.e2 = Freq)
+  results <- left_join(results, d.e2, by = "Behav")
+  
+  # oh interesting, this includes strictly residents (most) and migrants
+  
+  
+  #### Elev, minimum distance 0.5km, tweaked in topmvmt() #### 
+  m.e3 <- topmvmt(m.e1, mdelta = 500)
+  results <- left_join(results, 
+                       data.frame(table(names(m.e3))) %>%
+                         rename(Behav = Var1, m.e3 = Freq), 
+                       by = "Behav")
+  # ha! now mostly even split bt residents and migrants
+  
+  
+  
+  #### Elev, minimum distance 0.5km, no complexity penalization, tweaked in topmvmt() #### 
+  m.e4 <- topmvmt(m.e1, mdelta = 500, a.rule = F)
+  d.e4 <- data.frame(table(names(m.e4))) %>%
+    rename(Behav = Var1, m.e4 = Freq)
+  results <- left_join(results, d.e4, by = "Behav")
+  
+  # same result as with NSD, which tells me 
+  # model complexity isn't what's stopping classification as mixedmig
+  
+  # take-homes from this exercise:
+  # it does make the most sense to tweak parameters after running the default model, and
+  # any lack of mixedmig classn is not just an artifact of aic penalizing model complexity
+  
+  
+  
+  ##### SAPPH "KNOWN" INDIV DATA SUBSET MODEL RUNS ####
+    
+  #### Default parameters ####
+  
+  ### NSD ### 
+  m.n1 <- mvmtClass(testlt)
+  m.n1
+  # all mixmig except resident with most core overlap, disperser (?!)
+  testresults <- left_join(testresults, 
+                           data.frame(table(names(topmvmt(m.n1)))) %>%
+                             rename(Behav = Var1, m.n1 = Freq), 
+                           by = "Behav")
+  
+  ### Elev ###
+  m.e1 <- mvmtClass(testlt, fam = "elev")
+  m.e1
+  # lots of convergence errors
+  testresults <- left_join(testresults, 
+                           data.frame(table(names(topmvmt(m.e1)))) %>%
+                             rename(Behav = Var1, m.e1 = Freq), 
+                           by = "Behav") 
+  
+  ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+  
+  
+  #### Tweaked parameters - min dist ####
+  
+  
+  ### NSD ### 
+  m.n2 <- topmvmt(m.n1, mdelta = 1000)
+  m.n2
+  summary(m.n2)
+  # all mixmig except resident with most core overlap, disperser (?!)
+  testresults <- left_join(testresults, 
+                           data.frame(table(names(m.n2))) %>%
+                             rename(Behav = Var1, m.n2 = Freq), 
+                           by = "Behav")
+  
+  ### Elev ###
+  m.e2 <- topmvmt(m.e1, mdelta = 1000)
+  m.e2
+  # lots of convergence errors
+  testresults <- left_join(testresults, 
+                           data.frame(table(names(m.e2))) %>%
+                             rename(Behav = Var1, m.e2 = Freq), 
+                           by = "Behav") 
 
   
   
@@ -245,3 +418,21 @@
   group_by(AnimalID, Date) %>%
     filter(row_number() == 1) %>%
     ungroup()
+  
+  
+  
+  
+  #### from after creating actual R script for this ####
+  
+  # figure out how to store output
+  # make a list of top-supported models for each indiv
+  hm <- topmvmt(mod.nsd)
+  hm2 <- names(hm)
+  table(hm2)
+  table(names(topmvmt(mod.nsd))) # summary table of classns
+  test <- matrix(hm)
+  a <- hm$mixmig$data # not that...
+  hm$mixmig$m # no this is actual function code
+  hm$mixmig$message # newp
+  # ok stop burning time
+  
