@@ -47,22 +47,11 @@
       setwd(wd_worklaptop)
     }
   }
+
   
-  
-  
-  # #### Database connection ####
-  # 
-  # if(file.exists(wd_worklaptop)) {
-  #   channel <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-  #                               dbq=C:/Users/kristin/Documents/DatabasesEtc/Statewide/Elk/Statewide_Elk_GPS.accdb")
-  # } else {  cat("Maybe you shouldn't have been so lazy when you made this code") }
-  # 
-  # 
-  # 
   #### Projections ####
   
-  latlong <- CRS("+init=epsg:4326")
-  stateplane <- CRS("+init=epsg:2818") #this is NAD83
+  latlong <- CRS("+init=epsg:4326") # elk collar data 
   utm <- CRS("+init=epsg:3742") # NAD83(HARN)/UTMzone12N
   
   
@@ -72,11 +61,6 @@
   rawlocs <- read.csv("locs-allcows-withelevs.csv")
 
 
-      # pull 10 random rows to play with for little tests
-      
-      play <- rawlocs[sample(nrow(trawlocs), 10), ]
-      head(play)   
-      
       
       
       # keep it clean
@@ -436,3 +420,237 @@
   hm$mixmig$message # newp
   # ok stop burning time
   
+  
+  
+#### fixing dates for 61730 (and presumably others) ####
+  
+z <- filter(rawlocs, AnimalID == "61730")
+head(z)
+# there's your problem, looks like a typo in the database
+# this is because you're pulling from DateTime column of Access
+# which you already knew was wrong for some indivs 
+# remember only use this for TIME; use Date for Date
+
+# fixed; reran all elkdb stuff with corrected DateTime column (killed DT)
+
+
+#### more older code from prelim runs ####
+#### decided not to use elev because not comparable to nsd, unfortunately ####
+
+   ####~ELEVATION MODELS~####
+      
+            
+            # using "known" sapph elk #
+            
+            
+            #### straight nsd, no tweaks ####
+            m.e1 <- mvmtClass(testlt, fam = "elev")
+            m.e1 # all mig but 2 dispersers (the furthest mig and int indivs)
+            
+            
+            #### tweak distance > 1km ####
+            
+            #### specified in initial model ####
+            m.e2 <- mvmtClass(testlt, p.est = pEst(s.d = 1))
+            m.e2 # 2 residents, least far int and most core res
+                 # 2 migrants, most hr int and least hr res
+                 # rest mixmig
+            
+            #### specified for topmodel selection ####
+            m.e3 <- topmvmt(m.e1, mdelta = 1000) 
+            names(m.e3) # just residents and migrants
+            
+
+            
+            # using obvious LD migrants #
+            
+            #### straight nsd, no tweaks ####
+            m2.e1 <- mvmtClass(test2lt, fam = "elev")
+            m2.e1 # all mig 
+            
+            
+            #### tweak distance > 1km ####
+            
+            #### specified in initial model ####
+            m2.e2 <- mvmtClass(test2lt, p.est = pEst(s.d = 1))
+            m2.e2 # 
+            
+            #### specified for topmodel selection ####
+            m2.e3 <- topmvmt(m2.e1, mdelta = 1000) 
+            names(m2.e3) # all resident (i could be confused about units here)
+          
+		  
+                  
+            #### specified for topmodel selection ####
+            m.n3 <- topmvmt(m.n1, mdelta = 9000) 
+            names(m.n3) # all resident RUN1, except 2 nomads RUN2
+            names(m.n3[1])
+            
+            
+            # using obvious LD migrants #
+            
+            #### specified in initial model ####
+            m2.n2 <- mvmtClass(test2lt, p.est = pEst(s.d = 9))
+            m2.n2 # all mixmig except 140100(strongR), now disperser RUN1
+            # all mixmig except 141130(weakI), now migrant RUN2
+            # all mixmig except 140050(shortI) now res, 140100 now disperser
+            
+            #### specified for topmodel selection ####
+            m2.n3 <- topmvmt(m2.n1, mdelta = 9000) 
+            names(m2.n3) # all resident RUN1, except 2 nomads RUN2
+            names(m2.n3[1])
+            
+            
+
+            #### specified for topmodel selection ####
+            m.n5 <- topmvmt(m.n1, mdelta = 200)
+            names(m.n5) # all resident again
+		  
+		          
+        #### tweak distance > 9km (from dist bt centroids of migrants) ####
+        
+            # using "known" sapph elk #
+        
+            #### specified in initial model ####
+            m.n2 <- mvmtClass(testlt, p.est = pEst(s.d = 9))
+            m.n2 # all mixmig except 140100(strongR), now disperser RUN1
+                 # all mixmig except 141130(weakI), now migrant RUN2
+                 # all mixmig except 140050(shortI) now res, 140100 now disperser
+				 
+				 
+				         #### tweak distance > 2km (for comparison) ####
+            
+            #### specified in initial model ####
+            m.n4 <- mvmtClass(testlt, p.est = pEst(s.d = 2))
+            m.n4 # all mixmig except the residents, who are now mig (wtf)
+            
+            
+
+            
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###           
+####            *from actual got-my-shit-together runs*            ####
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+
+            
+    #### n1: straight nsd, no tweaks ####
+		
+			m.n1 <- mvmtClass(testlt)
+			m.n1 # all mixmig; some convergence issues
+			
+			m2.n1 <- mvmtClass(test2lt)
+			m2.n1 # 2 mixmig and 1 usu other; some convergence issues
+      
+			# both have some convergence issues
+			
+					
+			
+    #### n2: shared pre-defined start date (end feb) ####
+		
+			m.n2 <- mvmtClass(testlt, stdt = "02-28")
+			m.n2 # very similar to no tweaks
+			
+			m2.n2 <- mvmtClass(test2lt, stdt = "02-28")
+			m2.n2 # very similar to no tweaks
+			
+			# this actually makes convergence worse
+			
+			
+		
+		#### more stuff ####
+		
+			m.n1 <- mvmtClass(testlt, stdt = "02-28", p.est = pEst(s.d = 1))
+			m.n1 # all mixmig; some convergence issues
+			
+			m2.n1 <- mvmtClass(test2lt, stdt = "02-28", p.est = pEst(s.d = 1))
+			m2.n1 # 2 mixmig and 1 usu other; some convergence issues
+			
+			# yep, convergence even worse
+			
+			
+			
+		#### n1: base models ####
+		
+			m.n1 <- mvmtClass(testlt, stdt = "02-28", p.est = pEst(s.d = -1))
+			m.n1 # 
+			
+			m2.n1 <- mvmtClass(test2lt, stdt = "02-28", p.est = pEst(s.d = -1))
+			m2.n1 # 
+			
+			# this fixes all convergence issues, but i don't understand biological interpretation
+			# minimum delta is min dist between the 2 seasonal ranges
+			# s.d. = 0.001 results in convergence issues, but s.d. = -1 doesn't
+			# so... ranges have to be negatively far away from each other?
+			# do these elk exist in an alternate dimension?
+			# maybe i'll try refine() for this like derek did in vignette
+			
+			
+		#### n4: omit mixedmig and remove complexity penalization ####
+		
+			m.n3 <- topmvmt(m.n2, omit = "mixmig", a.rule = F)
+			names(m.n3) # 2 res, rest mig
+			
+			m2.n3 <- topmvmt(m2.n2, omit = "mixmig", a.rule = F)
+		  names(m2.n3) # 1 mig, 2 disp
+		  
+		  # this makes no diff
+		  
+		  
+		#### n4: start date + min dist tweaks, no mixmig ####
+
+			m.n4 <- topmvmt(m.n2, mdelta = 100, omit = "mixmig")
+			names(m.n4) # mdelta = 100 gives mix of res and mig
+		  
+			m2.n4 <- topmvmt(m2.n2, mdelta = 1000, omit = "mixmig")
+			names(m2.n4) # 2 mig, one disp
+			
+			
+						
+		#### n5: start date + min occupancy time 30d ####
+		
+			m.n5 <- topmvmt(m.n2, mrho = 30, omit = "mixmig")
+			names(m.n5) # all mix, one res
+			
+			m2.n5 <- topmvmt(m2.n2, mrho = 30, omit = "mixmig")
+		  names(m2.n5) # 2 mix, one disp
+		
+		  # found no diff bt min occupancy time 30 or 60 days
+		  
+		  
+		  		    
+		#### n5: min occupancy 2mo & incl mixedmig ####
+		
+			m.n5 <- topmvmt(m.n2, mrho = 60)
+			names(m.n5) # all mix, one res
+			
+			m2.n5 <- topmvmt(m2.n2, mrho = 60)
+		  names(m2.n5) # 2 mix, one disp
+		  
+		  # this just makes almost everybody mixed still, which isn't helpful
+		
+		#### n6: start date + min dist 1k + min occupancy time ####
+			
+			m.n5 <- topmvmt(m.n2, mdelta = 1000, mrho = 30, omit = "mixmig")
+			names(m.n5) # all res but one nomad
+			
+			m2.n5 <- topmvmt(m2.n2, mdelta = 1000, mrho = 30, omit = "mixmig")	
+      names(m2.n5) # 2 mix, one dis
+        
+      
+      
+#### NOT MODELS ANY MORE ####
+
+play <- rawlocs[sample(nrow(rawlocs), 10),]    
+      
+# only keep indivs w certin number days      
+play <- play %>%
+  group_by(AnimalID) %>%
+  mutate(Num = n()) %>%
+  ungroup()
+  nrow(play)
+      
+      
+play <- play %>%
+  group_by(AnimalID) %>%
+  filter(n() > 300) %>%
+  ungroup()
+nrow(play)
