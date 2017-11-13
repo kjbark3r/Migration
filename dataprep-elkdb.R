@@ -69,7 +69,14 @@
     mutate(Herd = trimws(Herd)) %>%
     # rename S Pioneers and W Pioneers as Pioneers; rename Border to Clarks Fork
     mutate(Herd = ifelse(grepl("Pioneer", Herd), "Pioneers",
-                         ifelse(Herd == "Border", "Clarks Fork", Herd)))
+                         ifelse(Herd == "Border", "Clarks Fork", Herd))) %>%
+    # format date-times (DT had NAs; replace with properly formatted DateTime)
+    select(-DT) %>% 
+    within(Date <- as.Date(Date)) %>%
+    within(Time <- strftime(Time, format="%H:%M:%S")) %>%
+    mutate(Year = substr(Date, 0, 4), 
+      Month = as.numeric(substr(Date, 6, 7))) %>%
+    mutate(DateTime = paste(Date, Time, sep = " ")) 
   write.csv(allcowlocs, file = "locs-allcows.csv", row.names = F)  
   
   
@@ -105,11 +112,6 @@
   # identify populations (and years) to include in analysis
   
   popnyrs <- allcowlocs %>%
-    # format and create date/time/year/month columns
-    within(Date <- as.Date(Date)) %>%
-    within(Time <- strftime(Time, format="%H:%M:%S")) %>%
-    mutate(Year = substr(Date, 0, 4), 
-           Month = as.numeric(substr(Date, 6, 7))) %>%
     # only incl indivs with locs spanning entire yr (thru dec)
     group_by(AnimalID, Year) %>%
     # month>8 accts for e/w fork captures starting in nov
@@ -157,15 +159,10 @@
   # only keep locs not collected during capture of that popn
      
   locs <- allcowlocs %>%
-    # format and create date/time/year/month columns
-    within(Date <- as.Date(Date)) %>%
-    within(Time <- strftime(Time, format="%H:%M:%S")) %>%
-    mutate(Year = substr(Date, 0, 4),
-           Month = as.numeric(substr(Date, 6, 7))) %>%
     # only use locs from popns and yrs of interest
     semi_join(popnyrs, by = c("Herd", "Year")) %>%
     # add capture date info
-    left_join(capdates, by = "Herd") %>%
+    left_join(capdates, by = c("Herd", "Year")) %>%
     # remov locs collected during capture
     mutate(LastCapDate = as.Date(LastCapDate)) %>%
     filter(Date > LastCapDate) %>%
@@ -177,14 +174,14 @@
   write.csv(locs, file = "locs.csv", row.names = F)
 
   
-  ## -skip spot- ####
-    rm(channel)
-    fixedcap <- read.csv("capdat-allindivs.csv")
-    popnyrs <- read.csv("popns-yrs.csv")
-    locs <- read.csv("locs.csv")
+  # ## -skip spot- ####
+  #   rm(channel)
+  #   fixedcap <- read.csv("capdat-allindivs.csv")
+  #   popnyrs <- read.csv("popns-yrs.csv")
+  #   locs <- read.csv("locs.csv")
   
   # sanity check- verify capture and collar data id'd same #indivs
-  length(unique(locs$AnimalID)); sum(popnyrs$nIndiv)  # yes, n=356
+  length(unique(locs$AnimalID)); sum(popnyrs$nIndiv)  
   
 
   # identify individuals of interest
