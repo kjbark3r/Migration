@@ -46,9 +46,5 @@ elevs <- as.data.frame(extract(ras, locs.sp))
 colnames(elevs) <- "Elev"
 locelevs <- cbind(locs, elevs) %>%
   within(Sex <- "Female") %>%
-  mutate(DT = as.POSIXct(DT, format = "%Y-%m-%d")) %>%
-  within(Time <- substr(Time, 12, 19)) %>%
-  mutate(DateTime = as.POSIXct(paste(DT, Time, sep = " "),
-                           format = "%Y-%m-%d %H:%M:%S")) %>%
-    dplyr::select(AnimalID, Herd, DateTime, Latitude, Longitude, Sex, Elev)
+  dplyr::select(AnimalID, Herd, DateTime, Latitude, Longitude, Sex, Elev)
 write.csv(locelevs, "../locs-allcows-withelevs.csv", row.names = FALSE)
