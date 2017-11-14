@@ -81,7 +81,7 @@
     
     modlocs <- rawlocs %>%
       # only consider populations of interest
-      semi_join(herdsonly, by = c("Herd")) 
+      semi_join(herdsonly, by = c("Herd")) %>%
       # create POSIXct DateTime for ltraj object; pull just Date from this
       mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
       mutate(Day = as.Date(DateTime)) %>%
@@ -104,8 +104,13 @@
       filter(n() > 300) %>%
       ungroup() 
     
-    # remove all stored factor levels
+    # remove stored factor levels and Date NAs
     modlocs <- droplevels(modlocs)
+    modlocs <- filter(modlocs, !is.na(Date))
+    
+    
+    # identify indivs
+    modindivs <- data.frame(AnimalID = unique(modlocs$AnimalID))
    
   
    
@@ -137,21 +142,40 @@
     
     
     ### ones above the asterisks are from when i started to clean up the code
+    ### to use it with the full dataset
     ### before realizing it made more sense to try something else
     
     
     #### Base model - no tweaks ####
-    m.base <- mvmtClass(modlocs)
+    m.base <- mvmtClass(lt)
     m.base
-    
-    
-    #### Refine (with negative delta value?) to fix convergence issues ####
-    m.ref <- refine(m.base,  p.est = pEst(s.d = -1))
-	  all(fullmvmt(m.ref))
+    d.base <- data.frame(attributes(topmvmt(m.base))) %>%
+      rename(AnimalID = burst, baseAll = names) 
 	  
 	  
-	  #### Omit mixed-migrant classification
-	  mod <- topmvmt(m.ref, omit = "mixmig")
+    #### Negative starting delta
+    m.sd <- refine(m.base, p.est = pEst(s.d = -1))
+    d.sd <- data.frame(attributes(topmvmt(m.sd))) %>%
+      rename(AnimalID = burst, sdAll = names)
+    
+    
+    #### Omit mixed-migrant classification
+	  m.base.mm <- topmvmt(m.base, omit = "mixmig")
+	  d.base.mm <- data.frame(attributes(m.base.mm)) %>%
+	    rename(AnimalID = burst, baseNoMix = names)
+	  
+	  m.sd.mm <- topmvmt(m.sd, omit = "mixmig")
+	  d.sd.mm <- data.frame(attributes(m.sd.mm)) %>%
+	    rename(AnimalID = burst, sdNoMix = names)
+	  
+	  #### Store results
+	  moddat.base <- full_join(d.base, d.base.mm, by = "AnimalID")
+	  moddat.sd <- full_join(d.sd, d.sd.mm, by = "AnimalID")
+	  moddat <-  moddat.base %>%
+	    full_join(moddat.sd, by = "AnimalID") %>%
+	    select(c(AnimalID, sdAll, sdNoMix, baseAll, baseNoMix))
+	  write.csv(moddat, file = "./zOldAndMisc/migrateRprelimrun.csv",
+	            row.names = F)
 
 	  
 	  
