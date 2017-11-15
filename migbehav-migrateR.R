@@ -6,20 +6,9 @@
 
 
 
-# This code semi-walks through through the migrater vignette 
-# using a  small subset of individuals of "known" behavior
-# to get a feel for how the anaysis would work
-
-
-# take-homes from running the code:
-  # elevational and nsd models aren't always directly comparable
-      # e.g. no mixed-migrant or nomad options for elevational
-  # basic idea for how this code works is,
-      # specify models with as few constraints as possible
-      # then use refine() to address convergence issues
-      # then use topmvmt() to further constrain parameters
-          # and exclude models from consideration
-
+# This code uses Derek Spitz's migrateR package
+# to classify elk migratory behavior as
+# migratory, resident, or something else based on NSD
 
 
 
@@ -145,26 +134,56 @@
     # identify best starting location for each indivdual
     rlocs <- findrloc(lt)
  
-    # define base model with no tweaks
+    # define base model with no tweaks, using best starting loc
     mb <- mvmtClass(lt, rloc = rlocs$rloc)
+    length(which(!fullmvmt(mb))) # 48 convergence issues
+    length(which(!fullmvmt(mb)))/length(fullmvmt(mb)) # ~12% of indivs
     
-    
-    # refine delta to avoid convergence issues
-    mr <- refine(mb, p.est = pEst(s.d = -1))
-    mr
-    
+    # refine model to reduce convergence issues (starting dist 0.5km, min duration 2wks)
+    mr <- refine(mb, p.est = pEst(l.r = 14, s.d = 0.5))
+    all(fullmvmt(mr))
+    length(which(!fullmvmt(mr)))/length(fullmvmt(mr)) # only 4% now
 
     # omit mixed-migrant model and require 2mo duration on range2
-    mot2 <- topmvmt(mr, omit = "mixmig", mrho = 90)
+    mot2 <- topmvmt(mr, omit = "mixmig", mrho = 60)
     attributes(mot2) 
         
-
     # store results
-    rslts <- data.frame(attributes(mots)) %>%
+    rslts <- data.frame(attributes(mot2)) %>%
       rename(AnimalID = burst, Behav = names) 
-	  
+	  summary(rslts)
 	  
 
+	  
+	  ##############################
+	  # for comparison, model using weird -1 starting delta
+	      # identify best starting location for each indivdual
+    
+    # refine model to reduce convergence issues (starting dist -1)
+    testmr <- refine(mb, p.est = pEst(s.d = -1))
+    all(fullmvmt(testmr))
+
+    # omit mixed-migrant model, require 2mo duration on range2, make min dist positive
+    testmot2 <- topmvmt(testmr, omit = "mixmig", mrho = 60, mdelta = 0.01)
+    attributes(testmot2) 
+        
+    # store results
+    testrslts <- data.frame(attributes(testmot2)) %>%
+      rename(AnimalID = burst, BehavNegSd = names) 
+	  summary(testrslts)
+	  
+	  comp <- full_join(rslts, testrslts, by = "AnimalID") %>%
+	    mutate(Samesies = ifelse(Behav == BehavNegSd, T, F))
+	  
+	  # check discrepancies
+	  plot(mr[[3]]) # ah, she's the one who ran away after capture
+	  
+	  # BROOT130035 - not in gis shp
+	  discrep <- filter(modlocs, AnimalID == "BROOT130035")
+	  # ok, she has the correct amount/duration of locations
+	  plot(mr[[281]]) # made one super short trip, maybe just shy of 2 mo
+	  
+	  
 	  write.csv(rslts, file = "behav-classn-nsd-prelim.csv", row.names = F)
 
 	  
