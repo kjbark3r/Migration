@@ -80,7 +80,10 @@ sge.hr <- hrs.all[hrs.all$id == "Sage Creek",]
 tob.hr <- hrs.all[hrs.all$id == "Tobacco Roots",]
 
 
-
+#### All count data ####
+grav.06 <- subset(grav, Year == 2006)
+grav.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=grav.06$Long,"y"=grav.06$Lat),
+                                   grav.06, proj4string = latlong), mad.hr@proj4string)
 
 ### ### ### ### ### ### ###
 ####  |COUNTS PER POP|  ###
@@ -94,12 +97,13 @@ mad.yr <- mad.hr@data$Year
 mad.dat <- subset(grav, Year == mad.yr)
 mad.yrlocs <- spTransform(SpatialPointsDataFrame(data.frame("x"=mad.dat$Long,"y"=mad.dat$Lat),
                                    mad.dat, proj4string = latlong), mad.hr@proj4string)
-plot(mad.hr); plot(mad.yrlocs, add=T)
+plot(mad.hr, main = "Madison 2006"); plot(mad.yrlocs, add=T)
 mad.locs <- mad.yrlocs[complete.cases(over(mad.yrlocs, mad.hr)), ] 
 mad.locs@data$Total <- as.numeric(mad.locs@data$Total)
 plot(mad.locs, add = T, col = "red")
-sum(mad.locs@data$Total)
-ests[ests$Herd == "Madison", 3]
+plot(grav.sp, add = T, col = "blue")
+# MADISON - Me, Dean #
+sum(mad.locs@data$Total); ests[ests$Herd == "Madison", 3]
 # sum from plotted points does not match dean's estimate
 # probably because herds are fluid and he's including those known to comingle from other locations
 
@@ -111,13 +115,13 @@ bla.yr <- bla.hr@data$Year
 bla.dat <- subset(grav, Year == bla.yr)
 bla.yrlocs <- spTransform(SpatialPointsDataFrame(data.frame("x"=bla.dat$Long,"y"=bla.dat$Lat),
                                                  bla.dat, proj4string = latlong), bla.hr@proj4string)
-plot(bla.hr); plot(bla.yrlocs, add=T)
+plot(bla.hr, main = "Blacktail 2011"); plot(bla.yrlocs, add=T)
 # expect dean's estimate to be higher than this count (same reason as madison)
 bla.locs <- bla.yrlocs[complete.cases(over(bla.yrlocs, bla.hr)), ] 
 bla.locs@data$Total <- as.numeric(bla.locs@data$Total)
 plot(bla.locs, add = T, col = "red")
-sum(bla.locs@data$Total) # this count
-ests[ests$Herd == "Blacktail", 3] # dean's estimate
+# BLACKTAIL  - Me, Dean #
+sum(bla.locs@data$Total) ; ests[ests$Herd == "Blacktail", 3] 
 # opposite of expectation, that's not good
 
 
@@ -128,10 +132,10 @@ tob.yr <- tob.hr@data$Year
 tob.dat <- subset(tobac, Year == tob.yr)
 tob.yrlocs <- spTransform(SpatialPointsDataFrame(data.frame("x"=tob.dat$Long,"y"=tob.dat$Lat),
                                                  tob.dat, proj4string = latlong), tob.hr@proj4string)
-plot(tob.hr); plot(tob.yrlocs, add=T)
+plot(tob.hr, main = "Tobacco Roots 2014"); plot(tob.yrlocs, add=T)
 tob.locs <- tob.yrlocs[complete.cases(over(tob.yrlocs, tob.hr)), ] 
 tob.locs@data$Total <- as.numeric(tob.locs@data$Total)
 plot(tob.locs, add = T, col = "red")
-sum(tob.locs@data$Total)
-ests[ests$Herd == "Tobacco Roots", 3]
+# TOB ROOTS  - Me, Dean #
+sum(tob.locs@data$Total); ests[ests$Herd == "Tobacco Roots", 3]
 # this summed count is more than dean's provided estimate
