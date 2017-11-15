@@ -91,17 +91,17 @@
       # identify 1st date of data
       mutate(Day1 = min(as.Date(DateTime))) %>%
       ungroup() %>%
-      # only include 1st yr of data, plus couple extra months for return to winter
-      filter(Day <= Day1+425) %>% 
+      # only include 1st full yr of data, plus extra month for full return to winter
+      filter(Day <= Day1 + 395) %>% 
       # remove stored factor levels that include removed indivs
       mutate(AnimalID = factor(AnimalID)) %>%
       # randomly select one loc per day per indiv
       group_by(AnimalID, Day) %>%
       sample_n(1) %>%
       ungroup() %>%
-      # remove indivs that don't have at least 10 months of data
+      # only indivs that had time to get back to winter range
       group_by(AnimalID) %>%
-      filter(n() > 300) %>%
+      filter(n() > 275) %>%
       ungroup() 
     
     # remove stored factor levels and Date NAs
@@ -130,6 +130,30 @@
                    id = modlocs$AnimalID,
                    # specify infolocs to allow elevational mign model
                    infolocs = data.frame(elev = modlocs$Elev))
+    
+    
+    
+    #### Create sample subset of "known behavior" individuals ####
+    
+    testindivs <- data.frame(
+      AnimalID = as.character(c("61730", "60450", "140480", "140560")),
+      DesiredStatus = as.character(c("MixedMig", "MigLD", "Resident", "MigSD")))
+    
+    
+    testlocs <- modlocs %>%
+      semi_join(testindivs, by = "AnimalID") %>%
+      droplevels()
+    
+    testlt <- as.ltraj(xy = testlocs[,c("X", "Y")], 
+                     # note date must be POSIXct
+                     date = testlocs$Date, 
+                     # specify indiv (also serves as default burst)
+                     id = testlocs$AnimalID,
+                     # specify infolocs to allow elevational mign model
+                     infolocs = data.frame(elev = testlocs$Elev))
+      
+      
+      
   
     
     
@@ -139,12 +163,99 @@
 ### ### ### ### ### ###
 ####    |MODELS|   ####
 ### ### ### ### ### ###     
+
     
     
-    ### ones above the asterisks are from when i started to clean up the code
-    ### to use it with the full dataset
-    ### before realizing it made more sense to try something else
+    # base model, no tweaks
+    mb <- mvmtClass(testlt)
     
+    # refine delta to avoid convergence issues
+    mr <- refine(mb, p.est = pEst(s.d = -1))
+    mr
+    
+      #### omitting mixedmig ####
+    
+        # omit mixed 
+        mo <- topmvmt(mr, omit = "mixmig")
+        attributes(mo) # all mig except the mixmig, who's nomad
+        
+        # omit mixed and constrain duration 2mo on range2
+        mot2 <- topmvmt(mr, omit = "mixmig", mrho = 60)
+        attributes(mot2) # ditto above
+        
+        # omit mixed and constrain duration 3mo on range 2
+        mot3 <- topmvmt(mr, omit = "mixmig", mrho = 90)
+        attributes(mot3) # now the weird resident is a disperser, better
+        
+        # omit mixed, constrain duration 2mo, constrain dist 2km
+        mot2d2 <- topmvmt(mr, omit = "mixmig", mrho = 60, mdelta = 2000)
+        attributes(mot2d2) # makes SD mig a resident, fair enough
+        
+        # omit mixed, constrain duration 2 mos, constrain dist 1km
+        mot2d1 <- topmvmt(mr, omit = "mixmig", mrho = 60, mdelta = 1000)
+        attributes(mot2d1) # ditto above
+        
+        # omit mixed, constrain duration 2 mos, constrain dist 0.5km
+        mot2d05 <- topmvmt(mr, omit = "mixmig", mrho = 60, mdelta = 500)
+        attributes(mot2d05) # ditto above
+            
+        # omit mixed, constrain duration 1 mo, constrain dist 0.5km
+        mot1d05 <- topmvmt(mr, omit = "mixmig", mrho = 30, mdelta = 500)
+        attributes(mot1d05) # ditto above
+        
+        
+     #### omitting nomad ####
+    
+        # omit mixed 
+        mn <- topmvmt(mr, omit = "nomad")
+        attributes(mn) # all mixmig except the mixmig, who's disperser
+        
+
+      #### removing penalty for complex models
+        
+        mc <- topmvmt(mr, a.rule = F)
+        attributes(mc) # now the mixmig is a nomad, i am so over this
+        
+        
+      #### specific troubleshooting ####
+        
+        
+        # confused about 140560, think she should be obvious SD mig
+        plot(mr[[2]])
+        spatmig(testlt, mr)
+        spatmig(testlt, mr, mod = "mixmig")
+        
+        # ok your issue for the short-distance migration is the distance constraint
+        # so just get rid of that, duh
+        
+        # check starting locs, is this worthwhile?
+        rlocs <- findrloc(testlt)
+        
+      
+        
+        
+      #### model specification i think will work best ####
+      
+        # base model, no tweaks
+        mb <- mvmtClass(testlt, rloc = rlocs$rloc)
+        
+        # refine delta to avoid convergence issues
+        mr <- refine(mb, p.est = pEst(s.d = -1))
+        mr
+        
+        # omit mixed and constrain duration 2mo on range2
+        mot2 <- topmvmt(mr, omit = "mixmig", mrho = 90)
+        attributes(mot2) # ditto above
+        
+        # IT WAS THE FUCKING STARTING LOCATION THE WHOLE TIIIIME
+        
+        
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #         
+    
+    ### now starting to clean up the code
+    ### to use it the full dataset
+
     
     #### Base model - no tweaks ####
     m.base <- mvmtClass(lt)
