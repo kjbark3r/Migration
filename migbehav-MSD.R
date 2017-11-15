@@ -42,7 +42,7 @@
   #### Data read-in and prep ####
     
     ## 11.13.17 trial run ##
-      # using ltraj obj already created while trying migrater
+      # using dataframe and ltraj obj already created while trying migrater
       # (the one of the 10 "known" sapph elk)
       # naming everything same as OG code names for ease of use
     
@@ -177,15 +177,17 @@
                       groups = ~ AnimalID,
                               na.action = na.exclude,
                               start = c(Asym = summary(asym.HRmod)$tTable[1], 
-                                               xmid = 30, scal = 2))
+                                               xmid = 30, scal = 2),
+                      verbose = T)
         summary(ranef2.Dispmod)
 
 
-        #### KRISTIN YOU LEFT OFF HERE ####
-        # with an error from the above model
+        # CONVERGENCE ERROR
             # Error in nlme.formula(MSD ~ Asym/(1 + exp((xmid - nDaysYr)/scal)), data = DayPos5,  : 
             # step halving factor reduced below minimum in PNLS step
         
+
+      
       
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
       
