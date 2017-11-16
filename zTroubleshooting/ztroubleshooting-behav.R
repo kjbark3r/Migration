@@ -654,3 +654,49 @@ play <- play %>%
   filter(n() > 300) %>%
   ungroup()
 nrow(play)
+
+
+
+#### not keeping all the dates (cutting off at end of calendar yr) ####
+
+hm <- filter(rawlocs, AnimalID == "70440")
+View(hm)
+# ok. rawlocs does include all the recorded locations, so the issue comes later
+
+hm2 <- filter(modlocs, AnimalID == "70440")
+View(hm2)
+
+hm3 <- filter(modlocs, AnimalID == "BROOT0014")
+View(hm3)
+
+rndmindivs <- sample(modindivs$AnimalID, 5)
+rndmindivs <- data.frame(as.character(rndmindivs))
+colnames(rndmindivs) = "AnimalID"
+rndmindivs$AnimalID <- as.character(rndmindivs$AnimalID)
+wtf <- rawlocs %>%
+  semi_join(rndmindivs, by = "AnimalID") %>%
+  mutate(AnimalID = as.character(AnimalID))
+unique(wtf$AnimalID)
+
+wtfmodlocs <- wtf %>%
+  ##DELETED 2 LINES HERE##    
+  # create POSIXct DateTime for ltraj object; pull just Date from this
+      mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
+      mutate(Day = as.Date(DateTime)) %>%
+      # remove stored factor levels that include removed indivs and popns
+      mutate(AnimalID = as.character(AnimalID), Herd = as.character(Herd)) %>%
+      group_by(AnimalID) %>%
+      # identify 1st date of data
+      mutate(Day1 = min(as.Date(DateTime))) %>%
+      ungroup() %>%
+      # only include 1st full yr of data, plus extra month for full return to winter
+      filter(Day <= Day1 + 395) %>% 
+      # remove stored factor levels that include removed indivs
+      mutate(AnimalID = factor(AnimalID)) %>%
+      # randomly select one loc per day per indiv
+      group_by(AnimalID, Day) %>%
+      sample_n(1) %>%
+       ungroup()
+
+rawsub <- rawlocs[rawlocs$AnimalID == rndmindivs[2,1],]
+wtfsub <- wtfmodlocs[wtfmodlocs$AnimalID == rndmindivs[2,1],]
