@@ -78,6 +78,7 @@
       Month = as.numeric(substr(Date, 6, 7))) %>%
     mutate(DateTime = paste(Date, Time, sep = " ")) 
   write.csv(allcowlocs, file = "locs-allcows.csv", row.names = F)  
+  # allcowlocs <- read.csv("locs-allcows.csv") 
   
   
   ## capture data ##
@@ -92,6 +93,7 @@
     # remove "ski hill" elk
     anti_join(rmelk, by = "AnimalID")
   write.csv(fixedcap, file = "capdat-allindivs.csv", row.names = F)
+  # fixedcap = read.csv("capdat-allindivs.csv")
   
   
   # close database connection
@@ -129,6 +131,7 @@
     ungroup() 
   write.csv(popnyrs, file = "popns-yrs.csv", row.names = F)
   sum(popnyrs$nIndiv) # print total indivs
+  # popnyrs <- read.csv("popns-yrs.csv")
     
 
   # summary capture info for each popn ####
@@ -150,6 +153,7 @@
     ungroup()
   sum(capdates$nIndiv) # note incls more indivs than we can actually use
   write.csv(capdates, file = "popn-capdates.csv", row.names=F)
+  # capdates <- read.csv("popn-capdates.csv")
     
     
   
@@ -159,19 +163,18 @@
   # only keep locs not collected during capture of that popn
      
   locs <- allcowlocs %>%
+    mutate(Date = as.Date(Date)) %>%
     # only use locs from popns and yrs of interest
-    semi_join(popnyrs, by = c("Herd", "Year")) %>%
+    semi_join(popnyrs, by = c("Herd")) %>%
+    # avoid duplicate column
+    select(-Year) %>%
     # add capture date info
-    left_join(capdates, by = c("Herd", "Year")) %>%
+    left_join(capdates, by = c("Herd")) %>%
     # remov locs collected during capture
     mutate(LastCapDate = as.Date(LastCapDate)) %>%
-    filter(Date > LastCapDate) %>%
-    # remove indivs who didn't make it through complete yr
-    group_by(AnimalID) %>%
-    mutate(MaxMonth = max(Month)) %>%
-    ungroup() %>%
-    filter(MaxMonth > 11)
+    filter(Date > LastCapDate) 
   write.csv(locs, file = "locs.csv", row.names = F)
+  # locs <- read.csv("locs.csv")
 
   
   # ## -skip spot- ####
@@ -209,6 +212,7 @@
     dplyr::select(AnimalID, Herd, CaptureArea, CaptureDate, CaptureYear, 
            Serology, Age_Type, Age, Old)
   write.csv(indivcap, "indiv-dat.csv", row.names = F)
+  # indivcap <- read.csv(indiv-dat.csv")
     
 
     
