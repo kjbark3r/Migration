@@ -102,9 +102,10 @@
       group_by(AnimalID) %>%
       filter(sum(YrMatch) > 275) %>% # appx 9 mo (thru dec)
       ungroup() %>%
-      # do NOT specify format with time to avoid daylight f&*ing savings time NAs 
+      # do NOT specify format with time to avoid daylight savings time NAs 
       mutate(Date = as.POSIXct(DateTime))
 
+    
   #### Identify indivs ###
     modindivs <- data.frame(AnimalID = unique(modlocs$AnimalID))
    
@@ -142,21 +143,58 @@
     
     # identify best starting location for each indivdual
     rlocs <- findrloc(lt)
- 
-    # define base model with no tweaks, using best starting loc
-    mb <- mvmtClass(lt, rloc = rlocs$rloc)
-    length(which(!fullmvmt(mb))) # 28 convergence issues
+    
+    
+    # expand default duration on summer range to allow up to 8 months
+    dur8 <- pEst(u.r = 240) 
 
-    # refine model to fix convergence issues
-    mr <- refine(mb, p.est = pEst(s.d = -1))
-    all(fullmvmt(mr)) # 0 convergence issues now
-                      # but i don't understand what a distance of -1 is...
+    
+    # define base model, rNSD with expanded duration parameter 
+    mb <- mvmtClass(lt, p.est = dur8, rloc = rlocs$rloc)
+    length(which(!fullmvmt(mb))) # 26 convergence issues
+    
+    
+    
+    # refine base model to address convergence issues #
+    
+    
+      # allow up to 80km2 mvmt within the same resident range
+      res9 <- pEst(u.r = 240, u.k = log(80))
+      mb2 <- refine(mb, p.est = res9)
+      length(which(!fullmvmt(mb2))) # 16 convergence issues
+    
+      
+      # can't move after summer starts
+      lv5 <- pEst(u.r = 240, u.t = 150)
+      mb3 <- refine(mb2, p.est = lv5)
+      length(which(!fullmvmt(mb3))) # 13 convergence issues
+      
+      # only has to move 25 km2
+      mv5 <- pEst(u.r = 240, l.d = 25)
+      mb4 <- refine(mb3, p.est = mv5)
+      length(which(!fullmvmt(mb4))) # 8 convergence issues
+      
+      # allow miniscule starting delta just to fix remaining issues
+        # after visually verifying models that failed to converge
+        # will basically never fit the data for those individuals
+      mb5 <- refine(mb4, p.est = pEst(s.d = 0.01))
+      length(which(!fullmvmt(mb5))) # 1 convergence issue
+      fullmvmt(mb5, out = "name") # can't fit mig, ok because not a mig
+      
+      
+    # preliminary look at model output
+    
+    mtop <- topmvmt(mb5, omit = "mixmig")
+    table(names(mtop)) # 34disp 228mig 2nom 33res
 
-    # omit mixed-migrant model, require 2mo duration on range2, make min dist positive
-    mot2 <- topmvmt(mr, omit = "mixmig", mrho = 60, mdelta = 0.01)
+
+    
+    
+    
+    
     
     # summarize and store results
-    rslts <- data.frame(attributes(mot2)) %>%
+    rslts <- data.frame(attributes(mb)) %>%
       rename(AnimalID = burst, Behav = names) 
 	  summary(rslts)
 	  write.csv(rslts, file = "behav-classn-nsd-prelim.csv", row.names = F)
