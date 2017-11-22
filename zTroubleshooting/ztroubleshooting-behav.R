@@ -700,3 +700,247 @@ wtfmodlocs <- wtf %>%
 
 rawsub <- rawlocs[rawlocs$AnimalID == rndmindivs[2,1],]
 wtfsub <- wtfmodlocs[wtfmodlocs$AnimalID == rndmindivs[2,1],]
+
+
+
+
+#### ooops you re-included individuals captured in subsequent years ####
+
+## subset 3 sapph elk to practice code on, 1 that should be removed
+
+testdate <- as.Date("2014-05-26")
+substr(testdate, 1, 4) == modlocs[1,12]
+
+testindivs <- data.frame(AnimalID = c("140040", "140050", "150920"))
+
+testlocs <- rawlocs %>%
+  semi_join(testindivs, by = "AnimalID") %>%
+     # create POSIXct DateTime for ltraj object; pull just date (Day) from this
+      mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
+      mutate(Day = as.Date(DateTime)) %>%
+      # remove stored factor levels that include removed indivs and popns
+      mutate(AnimalID = factor(AnimalID), Herd = factor(Herd)) %>%
+      group_by(AnimalID) %>%
+      # identify 1st date of data
+      mutate(Day1 = min(as.Date(DateTime))) %>%
+      ungroup() %>%
+      # only include 1st full yr of data, plus extra month for full return to winter
+      filter(Day <= Day1 + 395) %>% 
+      # remove stored factor levels that include removed indivs
+      mutate(AnimalID = factor(AnimalID)) %>%
+      # randomly select one loc per day per indiv
+      group_by(AnimalID, Day) %>%
+      sample_n(1) %>%
+      ungroup() %>%
+      # only include indivs with locations during the year of interest
+      # who also had time to get back to winter range
+      mutate(LocYr = substr(Day, 1, 4),
+             YrMatch = ifelse(LocYr == Year, 1, 0)) %>%
+      group_by(AnimalID) %>%
+      filter(sum(YrMatch) > 275) %>%
+      ungroup()
+
+
+
+
+#### motherfucking stupid shitty date times wtffff ####
+str(modlocs)
+hm <- modlocs[modlocs$AnimalID == modindivs[77,1],]
+
+modlocs[28835,16]
+modlocs[28835,5]
+paste(modlocs[28835,16], modlocs[28835,5], sep = " ")
+paste(modlocs[28835,16], modlocs[28835,5], sep = " ")
+
+
+
+#### determining definition of winter for each herd based on migration start dates ####
+            # because some have unexpectedly early thetas #
+
+# just pull popns where it's an issue
+testdat <- filter(modlocs, Herd == "Blacktail" | Herd == "East Fork" | Herd == "Greeley" | Herd == "NMadision" | Herd == "Silver Run")
+testlt <- as.ltraj(xy = testdat[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = testdat$Date, 
+                   # specify indiv 
+                   id = testdat$AnimalID)
+# and rerun models so you can plot indivs
+rlocs2 <- findrloc(testlt)
+mb2 <- mvmtClass(testlt, rloc = rlocs2$rloc)
+mr2 <- refine(mb2, p.est = pEst(s.d = -1))
+all(fullmvmt(mr2))
+# oh wait that may have been pointless
+
+# just pull INDIVS where it's an issue
+testindivs <- thetasindivs %>%
+  filter(DayDiff < 30) %>% # less than a month bt capture and mvmt
+  distinct() # 30 indivs to look at (incls nomads who may not be impt)
+
+# now we figure out how to only spatmig these indivs, i think
+spatmig(testlt[[1]], testdat[[1]])
+spatmig(testlt[1], testdat[1])
+spatmig # ohhhh, yeah, i don't think i can subset without rewriting that function
+        # which we all know i'm not gonna bother doing
+
+# can i extract those indivs from the lt, or do i need to run a new one?
+?Extract.ltraj
+
+testlt2 <- lt[id = "140060"] # cool
+testlt2 <- lt[id = "140060" | id = "140340"] # not cool
+testlt2 <- lt[id = "140060" | "140340"] # also not cool
+testlt2 <- lt[id = c("140060", "140340")] # ooooooh the coolest
+testlist <- c("140060", "140340")
+testlt2 <- lt[id = testlist] # damn i'm good
+
+rlocs2 <- findrloc(testlt2)
+
+testlist <- as.character(unique(testindivs$AnimalID))
+testlt <- lt[id = testlist] # i love it when a plan comes together
+# don't see quick answer for filtering modles unfortunately
+mb2 <- mvmtClass(testlt, rloc = rlocs2$rloc)
+mr2 <- refine(mb2, p.est = pEst(s.d = -1))
+
+# store csv to make comments in
+write.csv(testindivs, "./NSDresults/weirdthetas.csv", row.names=F)
+
+# plot
+
+spatmig(testlt, mr2)
+  # made notes about each one in /NSDresults/weirdthetas.csv
+
+
+
+
+ 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
+    
+    
+### ### ### ### ### ### ### ### ### ### ##
+####    |OK OK FOR REALZ THIS TIME|   ####
+### ### ### ### ### ### ### ### ### ### ##
+
+# (loaded nsd-baselocs.RData)
+
+
+# test base model 1 - no tweaks
+tm1 <- mvmtClass(lt)
+length(which(!fullmvmt(tm1))) # 48 convergence failures, yikes
+m1 <- topmvmt(tm1)
+table(names(m1)) # 2disp 47mig 229mix 8nom 11res
+
+
+# # # # # # # # # # # # # 
+
+
+# test parameter constraints 1 
+  # require 60 days on summer range; allow up to 6 months
+tp2 <- pEst(l.r = 60, u.r = 180)
+
+# test base model 1
+tm2 <- mvmtClass(lt, p.est = tp2)
+length(which(!fullmvmt(tm2))) # 40 convergence failures, better
+m2 <- topmvmt(tm2)
+table(names((m2))) #7disp 47mig 223mix 9nom 11res
+
+# what is up with all these mixed migrants??
+# gotta be something with the zetas i guess?
+# that's the only special thing about the mixmig model
+	  # extract parameters from all models
+    tparams <- mvmt2df(m2)
+    tparams
+    
+    # mixed mig only
+    tzeta <- tparams[[3]] 
+    tzeta$AnimalID <- rownames(tzeta)
+    summary(tzeta$zeta)
+    # zeta ranges from ~0 to ~1, seems pretty left-skewed
+    # oh, dur, it's a percent... pay attention kristin
+    # ok so this tells me over half of the elk classified as mixed
+    # had a distance between their 2nd and 3rd ranges 
+      # that was 75% of the distance between the 1st and second 
+      # (i think)
+    # another option to address this is phi2, forgot that one
+      # phi2 is the duration of mvmt (time to complete most of the return)
+    summary(tzeta$phi2)
+      # phi2 (return dur) ranges from 1 day to 3 weeks
+    # and compare mixedmig phi to mig phi
+    summary(tzeta$phi); summary(tparams[[2]]$phi)
+      # ok obviuosly it defaults to max out at 21 days
+      # also phi for mixmig is quite a bit bigger than for mig
+      # which means they take longer to get to wherever
+      # but interestingly, they take half-ish the time to get back
+        # which maybe doesn't make a ton of sense
+
+# # # # # # # # # # # # # 
+
+
+# test parameter constraints 2 
+  # require 60 days on summer range; allow up to 9 months
+tp3 <- pEst(l.r = 60, u.r = 280)
+
+# model 3 (constraints 2)
+tm3 <- mvmtClass(lt, p.est = tp3)
+length(which(!fullmvmt(tm3))) # back to 48, interesting
+m3 <- topmvmt(tm3)
+table(names((m3))) #6disp 46mig 221mix 21nom 12res
+
+
+# # # # # # # # # # # # # 
+
+
+# same parameter constraints as 1, but now with rloc
+  # require 60 days on summer range; allow up to 6 months
+tm3 <- mvmtClass(lt, p.est = tp2, rloc = rlocs$rloc)
+length(which(!fullmvmt(tm3))) # down to 27 convergence failures, much better
+m3 <- topmvmt(tm3)
+table(names((m3))) #8disp 35mig 236mix 3nom 15res
+            # but it still doesn't solve the mixedmig issue
+plot(tm3[[45]])
+plot(tm3[[42]], legend = F)
+plot(tm3[[44]], ranked = FALSE)
+plot(tm3[[44]], ranked = TRUE)
+migrateR::plot(tm3[[45]])
+
+
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
+    
+    
+### ### ### ### ### ### ### ### ### ### ### ###
+####   |INVESTIGATING CONVERGENCE ISSUES|  ####
+### ### ### ### ### ### ### ### ### ### ### ###
+
+
+# plan:
+
+#X identify indivs with issues
+conv <- data.frame(which(!fullmvmt(mb2))) 
+conv$AnimalID <- row.names(conv)
+colnames(conv)[1] <- "index"
+    
+
+# identify models for each indiv that failed to converge
+a <- fullmvmt(mb2, out = "name")
+b <- lapply(a, sort)
+b <- lapply(a, length)
+any(b < 5)
+any(b < 4) # T
+any(b < 3) # F - so everyone has at least 3 converged models
+c <- which(b < 5) # pointless, you have this in conv
+
+ci <- matrix(a)
+
+indexlist <- conv$index
+# want to pull these from a and add to conv (indiv info)
+
+# ok yknow what this is taking too long
+# just use your lt subset and keep rolling
+
+
+convlt <- lt[id = conv$AnimalID]
+
+
+# plot only individuals with convergence issues
+
+
