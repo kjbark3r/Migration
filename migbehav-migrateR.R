@@ -8,7 +8,7 @@
 
 # This code uses Derek Spitz's migrateR package
 # to classify elk migratory behavior as
-# migratory, resident, or something else based on NSD
+# migratory, resident, or something else based on rNSD
 
 
 
@@ -17,13 +17,6 @@
 ### ### ### ### ###
 
 
-
-  #### Packages ####
-  
-  
-    library(migrateR) 
-    library(dplyr) 
-  
 
   
   #### Working directory ####
@@ -41,6 +34,17 @@
     rm(wd_workcomp, wd_laptop, wd_worklaptop)
   
 
+    
+    
+  #### Packages ####
+  
+  
+    library(migrateR) 
+    source("NSDresults/test_plotmvmt2.R")
+    library(dplyr) 
+    
+    
+    
   # until i get the models figured out...
   # load this and skip to |MODELS|
   load("nsd-baselocs.RData")
@@ -117,7 +121,8 @@
                                          "Y" = modlocs$Latitude), 
                               modlocs, proj4string = latlong), utm))
     modlocs <- droplevels(modlocs) # because this somehow keeps happening
-    modlocs$AnimalID <- as.character(modlocs$AnimalID)
+    modlocs$AnimalID <- as.character(modlocs$AnimalID) # maybe this'll fix it
+    # write.csv(modlocs, "locs.csv", row.names=F)
 
 
     
@@ -129,10 +134,7 @@
                    id = modlocs$AnimalID)
     
     
-   #### store ####
-    save.image(file = "nsd-baselocs.RData") 
-    
- 
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
     
@@ -145,61 +147,97 @@
     rlocs <- findrloc(lt)
     
     
-    # expand default duration on summer range to allow up to 8 months
-    dur8 <- pEst(u.r = 240) 
+    
+#### store ####
+save.image(file = "nsd-baselocs.RData") 
+    
+    
+    
+    # expand default duration on summer range to allow up to 8 months (default was 84 days)
+    dur8 <- pEst(u.r = 240)  
 
     
     # define base model, rNSD with expanded duration parameter 
-    mb <- mvmtClass(lt, p.est = dur8, rloc = rlocs$rloc)
-    length(which(!fullmvmt(mb))) # 26 convergence issues
-    
+    mbase <- mvmtClass(lt, p.est = dur8, rloc = rlocs$rloc)
+    length(which(!fullmvmt(mbase))) # 26 convergence issues
     
     
     # refine base model to address convergence issues #
     
-    
-      # allow up to 80km2 mvmt within the same resident range
-      res9 <- pEst(u.r = 240, u.k = log(80))
-      mb2 <- refine(mb, p.est = res9)
-      length(which(!fullmvmt(mb2))) # 16 convergence issues
-    
-      
-      # can't move after summer starts
-      lv5 <- pEst(u.r = 240, u.t = 150)
-      mb3 <- refine(mb2, p.est = lv5)
-      length(which(!fullmvmt(mb3))) # 13 convergence issues
-      
-      # only has to move 25 km2
-      mv5 <- pEst(u.r = 240, l.d = 25)
-      mb4 <- refine(mb3, p.est = mv5)
-      length(which(!fullmvmt(mb4))) # 8 convergence issues
-      
-      # allow miniscule starting delta just to fix remaining issues
-        # after visually verifying models that failed to converge
-        # will basically never fit the data for those individuals
-      mb5 <- refine(mb4, p.est = pEst(s.d = 0.01))
-      length(which(!fullmvmt(mb5))) # 1 convergence issue
-      fullmvmt(mb5, out = "name") # can't fit mig, ok because not a mig
-      
-      
-    # preliminary look at model output
-    
-    mtop <- topmvmt(mb5, omit = "mixmig")
-    table(names(mtop)) # 34disp 228mig 2nom 33res
+      # allow up to 8km daily displacement within the same resident range
+      uk64 <- pEst(u.k = log(64))
+      mref1 = refine(mbase, p.est = uk64)
+      length(which(!fullmvmt(mref1))) # 12 convergence issues
 
+       
+      # migrant only has to move 50 km2 (to incl short-distance migrants)
+      ld50 <- pEst(u.r = 240, l.d = 50)
+      mref2 <- refine(mref1, p.est = ld50)
+      length(which(!fullmvmt(mref2))) # 7 convergence issues
 
-    
-    
-    
+      
+
+   
+    # identify top model for each individual #
+      
+      # require 2 months on summer range; require move 5km
+      mtop <- topmvmt(mref2, omit = "mixmig", mrho = 60, mdelta = 25)
+      topmods <- data.frame(AnimalID = modindivs, MigClassn = names(mtop))
+      write.csv(topmods, file = "./rNSDresults/initialclassns.csv", row.names=F)
+
     
     
     # summarize and store results
-    rslts <- data.frame(attributes(mb)) %>%
+    rslts <- data.frame(attributes(mtop)) %>%
       rename(AnimalID = burst, Behav = names) 
 	  summary(rslts)
 	  write.csv(rslts, file = "behav-classn-nsd-prelim.csv", row.names = F)
 
 	  
+
+	  
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
+    
+    
+### ### ### ### ### ###
+####   |VISUALS|   ####
+### ### ### ### ### ###     
+
+
+      num.plots <- nrow(modindivs)
+      my.plots <- vector(num.plots, mode='list')
+      
+      for(i in 1:num.plots) {
+        plot(mref2[[i]])
+        my.plots[[i]] <- recordPlot()
+      }
+      graphics.off()
+      
+      pdf('./rNSDresults/migbehav-plots.pdf', onefile = TRUE)
+      for(my.plot in my.plots) {
+        replayPlot(my.plot)
+      }
+      graphics.off()
+      
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
+    
+    
+### ### ### ### ### ### ### ##
+####    |SUBSET INDIVS|   ####
+### ### ### ### ### ### ### ##
+  
+  
+## to assess plots and ponder overclassification of mixedmig status
+  
+  
+
+  
+  
+  
+  
+  
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
     
@@ -231,29 +269,10 @@
 	           ppnRes = round(nRes/nIndivs, digits =2),
 	           ppnOther = round(nOther/nIndivs, digits = 2)) %>%
 	    dplyr::select(Herd, ppnMig, ppnRes, ppnOther, nIndivs)
-	  
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
     
-### ### ### ### ### ###
-####   |VISUALS|   ####
-### ### ### ### ### ###     
-
-
-  par(mfrow = c(5,6), mar = c(1,1,1,1))
-  
-  for(i in 1:nrow(modindivs)) {
-    plot(mr[[i]])
-  }
-
-	# i manually saved each one because i wasn't cool enough to do it programmatically
-	  
-  dev.off()
-
-
-  spatmig(lt, mr)
-
+    
+    
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
     
