@@ -98,11 +98,26 @@
         mutate(Year = ifelse(Month == 12, Year + 1, Year)) %>%
         # only keep indivs from popns and years interest
         semi_join(popnyrs, by = c("Herd", "Year")) %>%
-        # remove stored data about filtered out herds (too few indivs)
-        mutate(Herd = factor(Herd))
+        # remove stored data about filtered out herds and indivs
+        mutate(Herd = factor(Herd), AnimalID = factor(AnimalID))
+    write.csv(popnlocswin, file = "popnlocs-win.csv", row.names=F)
 
 
+    # winter locations with couple-month buffer (for winter covariate extraction)
+    popnlocswinbuff <- allcowlocs %>%
+        mutate(Year = as.numeric(substr(Date, 0, 4)),
+               Month = as.numeric(substr(Date, 6, 7))) %>%
+        # only locns collected during winter
+        filter(Month == 12 | Month == 1 | Month == 2 | Month == 3 | Month == 4) %>%
+        # map december locs to following year's winter
+        mutate(Year = ifelse(Month == 12, Year + 1, Year)) %>%
+        # only keep indivs from popns and years interest
+        semi_join(popnyrs, by = c("Herd", "Year")) %>%
+        # remove stored data about filtered out herds and indivs
+        mutate(Herd = factor(Herd), AnimalID = factor(AnimalID))
 
+
+    
   #### Define and subset info relevant for indiv home ranges  ####
 
     
@@ -114,23 +129,32 @@
       filter(Month == 12 | Month == 1 | Month == 2) %>%
       # map december locs to following year's winter
       mutate(Year = ifelse(Month == 12, Year + 1, Year)) %>%
-      # only keep indivs from popns and years interest
-      semi_join(popnyrs, by = c("Herd", "Year")) %>%
-      # remove stored data about filtered out herds (too few indivs)
-      mutate(Herd = factor(Herd)) %>%
-      # only locns collected during winter 
-      filter(Month == 12 | Month == 1 | Month == 2) %>%
-      # remove stored data about filtered out herds (too few indivs)
-      mutate(Herd = factor(Herd)) %>%
       # only indivs with at least 5 relocs (min required for hr estimation)
       group_by(AnimalID) %>%
       filter(n() > 5) %>%
       ungroup() %>%
       # remove stored data about filtered out indivs (too few locs)
-      mutate(AnimalID = factor(AnimalID))
+      mutate(AnimalID = factor(AnimalID),
+             Herd = factor(Herd))
+    write.csv(indivlocswin, "indivlocswin.csv", row.names=F)
     
 
-
+    # winter locations with couple-month buffer
+    indivlocswinbuff <- locs %>%
+      mutate(Year = as.numeric(substr(Date, 0, 4)),
+             Month = as.numeric(substr(Date, 6, 7))) %>%
+      # only locns collected during winter (dec-feb, note captures didn't start until jan)
+      filter(Month == 12 | Month == 1 | Month == 2) %>%
+      # map december locs to following year's winter
+      mutate(Year = ifelse(Month == 12, Year + 1, Year)) %>%
+      # only indivs with at least 5 relocs (min required for hr estimation)
+      group_by(AnimalID) %>%
+      filter(n() > 5) %>%
+      ungroup() %>%
+      # remove stored data about filtered out indivs (too few locs)
+      mutate(AnimalID = factor(AnimalID),
+             Herd = factor(Herd))
+    
       
 ### ### ### ### ### ##
 ####  |POPN HRS|  ####
@@ -169,7 +193,7 @@
     for (i in 1:length(popns)) {
      popn <- popns[i] 
      popnlocs <- filter(popnlocsall, Herd == popn)
-     # create and reproject spdf in one line like a fucking boss
+     # create and reproject spdf in one line 
      popn.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=popnlocs$Long,"y"=popnlocs$Lat),
                                                    popnlocs, proj4string = latlong), stateplane)
      writeOGR(popn.sp,
@@ -242,72 +266,143 @@
   #### Winter #### 
   
     ## get xy points; write to dataframe, to spatial data frame, to stateplane
-    spdf.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=popnlocswin$Long,"y"=popnlocswin$Lat),
-                                                  popnlocswin, proj4string = latlong), stateplane)
+    spdf.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=popnlocswin$Longitude,
+                                                             "y"=popnlocswin$Latitude),
+                            popnlocswin, proj4string = latlong), stateplane)
     
+ 
     ## estimate mcp for each population
-    popnhrs <- mcp(spdf.sp[,"Herd"], percent = 100,
+    popnwinmcps <- mcp(spdf.sp[,"Herd"], percent = 100,
                    unin = "m", unout = "km2")
-  
-    ## export population home ranges
-    writeOGR(popnhrs, 
+    
+    ## export population mcps
+    writeOGR(popnwinmcps, 
          dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
-         layer = "PpnWinHRs", 
+         layer = "PpnWinMCPs", 
          driver = "ESRI Shapefile",
          overwrite = TRUE)
+    
+ 
+       
+    ## estimate kde for each population
+    popnwinuds <- kernelUD(spdf.sp[,"Herd"], h = "href")
+                             #, extent = 2) # need extent > default of 1 
+    popnwinkdes <- getverticeshr(popnwinuds, percent = 95)
+  
 
-    ## export individual locations 
-    writeOGR(spdf.sp, 
-         dsn = "../GIS/Shapefiles/Elk", 
-         layer = "PpnWinLocns", 
+    ## export population kdes 
+    writeOGR(popnwinkdes, 
+         dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
+         layer = "PpnWinKDEs", 
          driver = "ESRI Shapefile",
          overwrite = TRUE)    
     
+    
     ## store winter hr area (for density estimation)
-    write.csv(popnhrs@data, file = "popn-winhr-areas.csv", row.names = F)
-
+    write.csv(popnwinmcps@data, file = "popn-winhr-areasMCP.csv", row.names = F)
+    write.csv(popnwinkdes@data, file = "popn-winhr-areasKDE.csv", row.names = F)
 
     
+    
+    
+    #### Winter with couple-month buffer - just locs ####
+        
+        ## make spatial etc etc...
+        spdf.sp2 <- spTransform(SpatialPointsDataFrame(data.frame("x"=popnlocswinbuff$Longitude,
+                                                                 "y"=popnlocswinbuff$Latitude),
+                                popnlocswinbuff, proj4string = latlong), stateplane)
+        
+        ## export all locations 
+        writeOGR(spdf.sp2, 
+             dsn = "../GIS/Shapefiles/Elk/IndivLocs", 
+             layer = "IndivWinLocs2moBuff", 
+             driver = "ESRI Shapefile",
+             overwrite = TRUE)    
+        
+        
+        
+        ## create population kdes of buffered winter timeframe
+        popnwinbuffuds <- kernelUD(spdf.sp2[,"Herd"], h = "href")
+        popnwinbuffkdes <- getverticeshr(popnwinbuffuds, percent = 99)
+  
+        
+        ## and export them
+        writeOGR(popnwinbuffkdes, 
+             dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
+             layer = "PopnWinBuffKDEs", 
+             driver = "ESRI Shapefile",
+             overwrite = TRUE)    
       
+        
+        
+
+    
 ### ### ### ### ### ###
 ####  |INDIV HRS|  ####
 ### ### ### ### ### ###
   
   
+    #### Winter ####
 
-  #### get xy points; write to dataframe, to spatial data frame, to stateplane ####
-  spdf.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=indivlocswin$Longitude,"y"=indivlocswin$Latitude), 
-                                                indivlocswin, proj4string = latlong), stateplane)
+      #### get xy points; write to dataframe, to spatial data frame, to stateplane ####
+      spdf.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=indivlocswin$Longitude,"y"=indivlocswin$Latitude), 
+                                                    indivlocswin, proj4string = latlong), stateplane)
+      
+    
+      # # COMMENTED OUT BC NEED TO DEFINE WINTER BASED ON MIG MVMT PARAMS, NOT GENERIC MONTHS
+      # # estimate kdes
+      # indivhrswin.kde <- kernelUD(spdf.sp[,"AnimalID"], 
+      #                             h = "href",
+      #                             extent = 2) # need extent > default of 1 
+      # indivhrswin.kde <- getverticeshr(indivhrswin.kde, percent = 95)
+      # plot(indivhrswin.kde)
+      
+      
+      # estimate mcps
+      indivhrswin.mcp <- mcp(spdf.sp[,"AnimalID"], percent = 100)
+      plot(indivhrswin.mcp, col = "blue")
+      
+      # #### export individual home ranges ####
+      # writeOGR(indivhrswin.kde, 
+      #          dsn = "../GIS/Shapefiles/Elk/IndivHRs", 
+      #          layer = "IndivWinKDEs", 
+      #          driver = "ESRI Shapefile",
+      #          overwrite = TRUE)
+      
+        # writeOGR(indivhrswin.mcp, 
+        #        dsn = "../GIS/Shapefiles/Elk/IndivHRs", 
+        #        layer = "IndivWinMCPs", 
+        #        driver = "ESRI Shapefile",
+        #        overwrite = TRUE)
+      
+      
+      # #### export individual locations ####
+      # writeOGR(spdf.sp, 
+      #          dsn = "../GIS/Shapefiles/Elk/IndivLocs", 
+      #          layer = "IndivWinLocs", 
+      #          driver = "ESRI Shapefile",
+      #          overwrite = TRUE)
+      
+
+      
+  #### Winter with couple-month buffer ####
+      
+        ## create population mcps of buffered winter timeframe
+        ## just for cows of interest (to determine herd overlap)
+        spdf.sp3 <- spTransform(SpatialPointsDataFrame(data.frame("x"=indivlocswinbuff$Longitude,
+                                                                 "y"=indivlocswinbuff$Latitude),
+                                indivlocswinbuff, proj4string = latlong), stateplane)
+        indivwinbuffuds <- kernelUD(spdf.sp3[,"AnimalID"], h = "href", extent = 14)
+        indivwinbuffkdes <- getverticeshr(indivwinbuffuds, percent = 95)
   
-  # estimate mcp
-  indivhrswin.mcp <- mcp(spdf.sp[,"AnimalID"], percent = 100)
-  plot(indivhrswin.mcp)
-  
-  
-  #### IN PROGRESS #### - grid/extent issue as usual
-  # estimate kde
-  indivhrswin.kdeprelim <- kernelUD(spdf.sp[,"AnimalID"], 
-                                    h = "href",
-                                    grid = 1660) 
-  indivhrswin.kde <- getverticeshr(indivhrswin.kdeprelim, percent = 95)
-  
-  #### export individual home ranges ####
-  writeOGR(indivhrswin, 
-           dsn = "../GIS/Shapefiles/Elk", 
-           layer = "IndivWinHRs", 
-           driver = "ESRI Shapefile",
-           overwrite = TRUE)
-  
-  
-  
-  #### export individual locations ####
-  writeOGR(spdf.sp, 
-           dsn = "../GIS/Shapefiles/Elk", 
-           layer = "IndivWinLocns", 
-           driver = "ESRI Shapefile",
-           overwrite = TRUE)
-  
-  #### *  * ####
+        
+        ## and export them
+        writeOGR(popnwinbuffkdes, 
+             dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
+             layer = "PopnWinBuffKDEs", 
+             driver = "ESRI Shapefile",
+             overwrite = TRUE)    
+    
   
   
 ### ### ###  ### ### ### 
