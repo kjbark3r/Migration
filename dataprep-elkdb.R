@@ -93,7 +93,7 @@
     # remove "ski hill" elk
     anti_join(rmelk, by = "AnimalID")
   write.csv(fixedcap, file = "capdat-allindivs.csv", row.names = F)
-  # fixedcap = read.csv("capdat-allindivs.csv")
+  # fixedcap <- read.csv("capdat-allindivs.csv")
   
   
   # close database connection
@@ -123,8 +123,10 @@
     group_by(Herd, Year) %>%
     summarise(nIndiv = n_distinct(AnimalID)) %>%
     ungroup() %>%
-    group_by(Herd) %>%
+    # only consider second yr of data for hd314 (cap too late to estimate winHR yr1)
+    filter(Herd != "HD314" | (Herd == "HD314" & Year != 2009)) %>%
     # identify yr with most indivs
+    group_by(Herd) %>%
     filter(nIndiv == max(nIndiv),
            nIndiv > 2, # 2 indivs per grp not enough
            Year > 2004) %>% # need 5+ yrs NDVIamp/ti per popn
@@ -138,11 +140,12 @@
   
   capdates <- fixedcap %>%
     filter(!is.na(CaptureDate) & Sex == "F") %>%
-    # determine month of capture
+    # format date; determine month of capture
+    mutate(CaptureDate = as.Date(CaptureDate)) %>%
     mutate(CaptureMonth = as.numeric(substr(CaptureDate, 6, 7))) %>%
-    mutate(Year = substr(CaptureDate, 0, 4)) %>%
+    mutate(Year = as.integer(substr(CaptureDate, 0, 4))) %>%
     # only keep herds and years of interest
-    semi_join(popnyrs, by = c("Herd", "Year")) %>%
+    semi_join(popnyrs, by = c("Herd")) %>%
     # account for e/w fork captures starting in nov for subsequent yr
     filter(CaptureMonth < 10) %>%
     # determine first and last capture date per popn
@@ -160,7 +163,8 @@
 ####  INDIVIDUALS ####
   
   
-  # only keep locs not collected during capture of that popn
+  # remove locs collected during capture of that popn
+  # but keep all others (even outside year of interest)
      
   locs <- allcowlocs %>%
     mutate(Date = as.Date(Date)) %>%
@@ -182,17 +186,18 @@
   #   fixedcap <- read.csv("capdat-allindivs.csv")
   #   popnyrs <- read.csv("popns-yrs.csv")
   #   locs <- read.csv("locs.csv")
-  
-  # sanity check- verify capture and collar data id'd same #indivs
-  length(unique(locs$AnimalID)); sum(popnyrs$nIndiv)  
-  
 
+  # difference between number of indivs of interest and indivs in popns of interest
+  sum(popnyrs$nIndiv)
+  length(unique(locs$AnimalID))
+  length(unique(locs$AnimalID)) - sum(popnyrs$nIndiv) # diff of 101 indivs
+  
   # identify individuals of interest
   indivs <- data.frame(AnimalID = unique(locs$AnimalID))
   
   # individual data - herd, age during year of interest, some capture info
   indivcap <- fixedcap %>%
-    semi_join(indivs, by = "AnimalID") %>%
+    left_join(popnyrs, by = "Herd") %>%
     # only keep original capture info for indivs captured >1x
     group_by(AnimalID) %>% 
     arrange(CaptureDate) %>% 
@@ -202,7 +207,6 @@
     mutate(Herd = factor(Herd)) %>%
     # determine animal age during year of interest
     rename(CaptureAge = Age) %>%
-    left_join(popnyrs, by = "Herd") %>%
     mutate(Year = as.integer(Year),
            CaptureYear = as.integer(substr(CaptureDate, 0, 4)),
            Age = CaptureAge + (Year - CaptureYear)) %>%
