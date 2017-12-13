@@ -166,18 +166,16 @@ save.image(file = "nsd-baselocs.RData")
     
       # allow up to 8km daily displacement within the same resident range
       uk64 <- pEst(u.k = log(64))
-      mref1 = refine(mbase, p.est = uk64)
+      mref1 <- refine(mbase, p.est = uk64)
       length(which(!fullmvmt(mref1))) # 12 convergence issues
 
        
       # migrant only has to move 50 km2 (to incl short-distance migrants)
       ld50 <- pEst(u.r = 240, l.d = 50)
       mref2 <- refine(mref1, p.est = ld50)
-      length(which(!fullmvmt(mref2))) # 7 convergence issues
+      length(which(!fullmvmt(mref2))) # 7 remaining convergence issues
 
       
-
-   
     # identify top model for each individual #
       
       # require 2 months on summer range; require move 5km
@@ -204,6 +202,9 @@ save.image(file = "nsd-baselocs.RData")
 ####   |VISUALS|   ####
 ### ### ### ### ### ###     
 
+	  
+	  
+	  #### behavioral classification plots ####
 
       num.plots <- nrow(modindivs)
       my.plots <- vector(num.plots, mode='list')
@@ -220,23 +221,30 @@ save.image(file = "nsd-baselocs.RData")
       }
       graphics.off()
       
+      
+      
+  #### checking location classifications on some indiv plots ####
+      
+      i140400 <- which(modindivs$AnimalID == 140400)
+      spatmig(lt[i140400], mref2[i140400])
+      spatmig(lt[i140400], mref2[i140400], mod = "disperser")
+      
+      
+      i140630 <- which(modindivs$AnimalID == 140630)
+      spatmig(lt[i140630], mref2[i140630])
+      spatmig(lt[i140630], mref2[i140630], mod = "disperser")  
 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
-    
-    
-### ### ### ### ### ### ### ##
-####    |SUBSET INDIVS|   ####
-### ### ### ### ### ### ### ##
-  
-  
-## to assess plots and ponder overclassification of mixedmig status
-  
-  
-
-  
-  
-  
-  
+      
+      i140710 <- which(modindivs$AnimalID == 140710)
+      spatmig(lt[i140710], mref2[i140710])
+      spatmig(lt[i140710], mref2[i140710], mod = "disperser")  
+      
+      
+      i140890 <- which(modindivs$AnimalID == 140890)
+      spatmig(lt[i140890], mref2[i140890])
+      spatmig(lt[i140890], mref2[i140890], mod = "disperser")  
+      
+      
   
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
