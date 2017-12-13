@@ -62,8 +62,10 @@
 
   rmelk <- filter(rawcap, CaptureArea == "Ski Hill") # this also removes NAs
   allcowlocs <- rawlocs %>%
+    # format sex properly (otherwise it reads F as FALSE)
+    mutate(Sex = ifelse(Sex == "F", "Female", "Male")) %>%
     # remove bulls, missing locations, and "ski hill" elk
-    filter(Sex == "F" & !is.na(Latitude)) %>%
+    filter(Sex == "Female" & !is.na(Latitude)) %>%
     anti_join(rmelk, by = "AnimalID") %>%
     # remove trailing whitespace from Madison herd name
     mutate(Herd = trimws(Herd)) %>%
@@ -136,6 +138,7 @@
   # popnyrs <- read.csv("popns-yrs.csv")
     
 
+  
   # summary capture info for each popn ####
   
   capdates <- fixedcap %>%
@@ -164,19 +167,22 @@
   
   
   # remove locs collected during capture of that popn
-  # but keep all others (even outside year of interest)
-     
+
   locs <- allcowlocs %>%
     mutate(Date = as.Date(Date)) %>%
-    # only use locs from popns and yrs of interest
-    semi_join(popnyrs, by = c("Herd")) %>%
-    # avoid duplicate column
-    select(-Year) %>%
+    rename(YrOfLoc = Year) %>%
+    # only consider locs from popns of interest
+    inner_join(popnyrs, by = c("Herd")) %>%
+    rename(YrOfInterest = Year) %>%
+    dplyr::select(-nIndiv) %>%
     # add capture date info
     left_join(capdates, by = c("Herd")) %>%
-    # remov locs collected during capture
+    dplyr::select(-nIndiv) %>%
+    # remove locs collected during capture
     mutate(LastCapDate = as.Date(LastCapDate)) %>%
-    filter(Date > LastCapDate) 
+    filter(Date > LastCapDate) %>%
+    # remove locations prior to year of interest
+    filter(YrOfLoc >= YrOfInterest)
   write.csv(locs, file = "locs.csv", row.names = F)
   # locs <- read.csv("locs.csv")
 
@@ -190,11 +196,9 @@
   # difference between number of indivs of interest and indivs in popns of interest
   sum(popnyrs$nIndiv)
   length(unique(locs$AnimalID))
-  length(unique(locs$AnimalID)) - sum(popnyrs$nIndiv) # diff of 101 indivs
+  length(unique(locs$AnimalID)) - sum(popnyrs$nIndiv) 
   
-  # identify individuals of interest
-  indivs <- data.frame(AnimalID = unique(locs$AnimalID))
-  
+
   # individual data - herd, age during year of interest, some capture info
   indivcap <- fixedcap %>%
     left_join(popnyrs, by = "Herd") %>%
