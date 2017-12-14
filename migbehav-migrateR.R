@@ -127,15 +127,15 @@
 
     
   #### Identify indivs ###
-    modindivs <- data.frame(AnimalID = unique(modlocs$AnimalID))
+  modindivs <- data.frame(AnimalID = unique(modlocs$AnimalID))
    
   
    
   #### Convert Lat/Longs to UTMs ####
-    modlocs <- as.data.frame(spTransform(SpatialPointsDataFrame(
-                              data.frame("X" = modlocs$Longitude, 
-                                         "Y" = modlocs$Latitude), 
-                              modlocs, proj4string = latlong), utm))
+  modlocs <- as.data.frame(spTransform(SpatialPointsDataFrame(
+                            data.frame("X" = modlocs$Longitude, 
+                                       "Y" = modlocs$Latitude), 
+                            modlocs, proj4string = latlong), utm))
 
 
     # write.csv(modlocs, "locs.csv", row.names=F)
@@ -143,13 +143,15 @@
 
     
   #### Create ltraj object ### 
-    lt <- as.ltraj(xy = modlocs[,c("X", "Y")], 
-                   # note Date must be POSIXct
-                   date = modlocs$Date, 
-                   # specify indiv 
-                   id = modlocs$AnimalID)
+  lt <- as.ltraj(xy = modlocs[,c("X", "Y")], 
+                 # note Date must be POSIXct
+                 date = modlocs$Date, 
+                 # specify indiv 
+                 id = modlocs$AnimalID)
     
-    
+   
+    #### store ####
+    save.image(file = "nsd-baselocs.RData")  
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
@@ -157,16 +159,10 @@
 ### ### ### ### ### ###
 ####    |MODELS|   ####
 ### ### ### ### ### ###     
-
-    
-    # identify best starting location for each indivdual
-    rlocs <- findrloc(lt)
-    
-    
-    
-#### store ####
-save.image(file = "nsd-baselocs.RData") 
-    
+ 
+  
+    # identify most parsimonious starting loc for rNSD (within 2 weeks of start date)
+    rlocs <- findrloc(lt, max.rloc = 13)
     
     
     # define initial parameter constraints based on biological definition of migration
@@ -178,8 +174,8 @@ save.image(file = "nsd-baselocs.RData")
     
     # define base model, rNSD with expanded duration parameter and restricted timing
       
-      mbase <- mvmtClass(lt, p.est = timing, rloc = rlocs$rloc)
-      length(which(!fullmvmt(mbase))) # 40 convergence issues
+      mbase <- mvmtClass(lt, rloc = rlocs$rloc, p.est = timing)
+      length(which(!fullmvmt(mbase))) # XXX convergence issues
     
     
     # refine base model to address convergence issues #
@@ -187,33 +183,28 @@ save.image(file = "nsd-baselocs.RData")
       # allow up to 8km daily displacement within the same resident range
       uk64 <- pEst(u.k = log(64))
       mref1 <- refine(mbase, p.est = uk64)
-      length(which(!fullmvmt(mref1))) #  convergence issues
-      
-      # KRISTIN YOU LEFT OFF HERE
-      # ERROR ABOUT INFINITY PRODUCED
-      # HAPPENS ALSO IF YOU DO THIS IN BASE MODEL
+      length(which(!fullmvmt(mref1))) # XXX convergence issues
 
        
       # migrant only has to move 50 km2 (to incl short-distance migrants)
-      ld50 <- pEst(u.r = 240, l.d = 50)
-      mref2 <- refine(mbase, p.est = ld50)
-      length(which(!fullmvmt(mref2))) # 15 remaining convergence issues
+      ld50 <- pEst(u.r = 240, u.t = 150, l.d = 50)
+      mref2 <- refine(mref1, p.est = ld50)
+      length(which(!fullmvmt(mref2))) # XXX remaining convergence issues
 
       
     # identify top model for each individual #
       
       # require 2 months on summer range; require move 5km
-      mtop <- topmvmt(mref2, omit = "mixmig", mrho = 60, mdelta = 25)
+      mtop <- topmvmt(mref1, omit = "mixmig", mrho = 60, mdelta = 25)
       topmods <- data.frame(AnimalID = modindivs, PrelimClassn = names(mtop))
       write.csv(topmods, file = "./rNSDresults/initialclassns.csv", row.names=F)
 
-    
     
     # summarize and store results
     rslts <- data.frame(attributes(mtop)) %>%
       rename(AnimalID = burst, Behav = names) 
 	  summary(rslts)
-	  write.csv(rslts, file = "behav-classn-nsd-prelim.csv", row.names = F)
+	  write.csv(rslts, file = "./rNSDresults/behav-classn-nsd-prelim.csv", row.names = F)
 
 	  
 
