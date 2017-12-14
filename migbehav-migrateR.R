@@ -44,10 +44,10 @@
     library(dplyr) 
     
     
-    
-  # until i get the models figured out...
-  # load this and skip to |MODELS|
-  load("nsd-baselocs.RData")
+  #   
+  # # until i get the models figured out...
+  # # load this and skip to |MODELS|
+  # load("nsd-baselocs.RData")
   
   
   
@@ -62,7 +62,7 @@
   
     rawlocs <- read.csv("locs.csv")
     herds <- read.csv("popns-yrs.csv")
-    herdsonly <- select(herds, Herd)
+    herdsonly <- dplyr::select(herds, Herd)
 
   
 
@@ -77,37 +77,53 @@
   
   #### Subset and format raw data for use in models ####
     
-    modlocs <- rawlocs %>%
-      # only consider populations of interest and locations with dates
-      semi_join(herdsonly, by = "Herd") %>%
-      # remove HD314 from consideration because captured too late to estimate winterHR
-      filter(Herd != "HD314") %>%
+    # identify indivs of interest
+    indivs <- rawlocs %>%
       # create POSIXct DateTime for ltraj object; pull just date (Day) from this
       mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
       mutate(Day = as.Date(DateTime)) %>%
-      # remove stored factor levels that include removed indivs and popns
-      mutate(AnimalID = factor(AnimalID), Herd = factor(Herd)) %>%
+      # filter to only locations collected during year of interest
+      filter(YrOfLoc == YrOfInterest) %>%
+      # select one location per day
+      group_by(AnimalID, Day) %>%
+      slice(1) %>%
+      ungroup %>%
+      # only include indivs with at least 275 days of locations
       group_by(AnimalID) %>%
-      # identify 1st date of data
-      mutate(Day1 = min(as.Date(DateTime))) %>%
-      ungroup() %>%
-      # only include 1st full yr of data, plus extra month for full return to winter
-      filter(Day <= Day1 + 395) %>% 
-      # remove stored factor levels that include removed indivs
-      mutate(AnimalID = factor(AnimalID)) %>%
+      filter(n() > 275) %>%
+      dplyr::select(AnimalID) %>%
+      distinct()
+    indivs <- droplevels(indivs)
+
+    
+    # extract locations for individuals of interest
+    modlocs <- rawlocs %>%
+      # only considering individuals of interest
+      semi_join(indivs, by = "AnimalID") %>%
+      # create POSIXct DateTime for ltraj object; pull just date (Day) from this
+      mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
+      mutate(Day = as.Date(DateTime)) %>%
       # randomly select one loc per day per indiv
       group_by(AnimalID, Day) %>%
       sample_n(1) %>%
       ungroup() %>%
-      # only include indivs with locations during the year of interest
-      # who also had time to get back to winter range
-      mutate(LocYr = substr(Day, 1, 4), # year of that collar location
-             YrMatch = ifelse(LocYr == Year, 1, 0)) %>% # 1 if matches yr of interest
+      # identify 1st date of data
+      filter(YrOfLoc >= YrOfInterest) %>%
       group_by(AnimalID) %>%
-      filter(sum(YrMatch) > 275) %>% # appx 9 mo (thru dec)
+      mutate(Day1 = min(as.Date(DateTime))) %>%
       ungroup() %>%
+      # only include 1st full yr of data, plus extra month for full return to winter
+      filter(Day <= Day1 + 395) %>% 
+      # # only include individuals who  had time to get back to winter range (appx 9mo)
+      # group_by(AnimalID) %>%
+      # filter(n() > 275) %>%
+      # ungroup() %>%
       # do NOT specify format with time to avoid daylight savings time NAs 
       mutate(Date = as.POSIXct(DateTime))
+   
+    # remove any stored factor levels that above code removed
+    modlocs <- droplevels(modlocs)
+
 
     
   #### Identify indivs ###
@@ -120,8 +136,8 @@
                               data.frame("X" = modlocs$Longitude, 
                                          "Y" = modlocs$Latitude), 
                               modlocs, proj4string = latlong), utm))
-    modlocs <- droplevels(modlocs) # because this somehow keeps happening
-    modlocs$AnimalID <- as.character(modlocs$AnimalID) # maybe this'll fix it
+
+
     # write.csv(modlocs, "locs.csv", row.names=F)
 
 
@@ -153,13 +169,17 @@ save.image(file = "nsd-baselocs.RData")
     
     
     
-    # expand default duration on summer range to allow up to 8 months (default was 84 days)
-    dur8 <- pEst(u.r = 240)  
+    # define initial parameter constraints based on biological definition of migration
+      
+      # expand default duration on summer range to allow up to 8 months (default was 84 days), and
+      # restrict timing so movement after summer doesn't count as migration (default was any time)
+      timing <- pEst(u.r = 240, u.t = 150)  
 
     
-    # define base model, rNSD with expanded duration parameter 
-    mbase <- mvmtClass(lt, p.est = dur8, rloc = rlocs$rloc)
-    length(which(!fullmvmt(mbase))) # 26 convergence issues
+    # define base model, rNSD with expanded duration parameter and restricted timing
+      
+      mbase <- mvmtClass(lt, p.est = timing, rloc = rlocs$rloc)
+      length(which(!fullmvmt(mbase))) # 40 convergence issues
     
     
     # refine base model to address convergence issues #
@@ -167,20 +187,24 @@ save.image(file = "nsd-baselocs.RData")
       # allow up to 8km daily displacement within the same resident range
       uk64 <- pEst(u.k = log(64))
       mref1 <- refine(mbase, p.est = uk64)
-      length(which(!fullmvmt(mref1))) # 12 convergence issues
+      length(which(!fullmvmt(mref1))) #  convergence issues
+      
+      # KRISTIN YOU LEFT OFF HERE
+      # ERROR ABOUT INFINITY PRODUCED
+      # HAPPENS ALSO IF YOU DO THIS IN BASE MODEL
 
        
       # migrant only has to move 50 km2 (to incl short-distance migrants)
       ld50 <- pEst(u.r = 240, l.d = 50)
-      mref2 <- refine(mref1, p.est = ld50)
-      length(which(!fullmvmt(mref2))) # 7 remaining convergence issues
+      mref2 <- refine(mbase, p.est = ld50)
+      length(which(!fullmvmt(mref2))) # 15 remaining convergence issues
 
       
     # identify top model for each individual #
       
       # require 2 months on summer range; require move 5km
       mtop <- topmvmt(mref2, omit = "mixmig", mrho = 60, mdelta = 25)
-      topmods <- data.frame(AnimalID = modindivs, MigClassn = names(mtop))
+      topmods <- data.frame(AnimalID = modindivs, PrelimClassn = names(mtop))
       write.csv(topmods, file = "./rNSDresults/initialclassns.csv", row.names=F)
 
     
