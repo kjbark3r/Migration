@@ -944,3 +944,1187 @@ convlt <- lt[id = conv$AnimalID]
 # plot only individuals with convergence issues
 
 
+
+       # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
+    
+    
+### ### ### ### ### ### ### ### ### ### ### ###
+####    |Example plot stuff for derek|   ####
+### ### ### ### ### ###    ### ### ### ### ### ### 
+        
+      sublocs <- filter(modlocs, AnimalID == "140340")
+      write.csv(sublocs, file = "./NSDresults/indiv140340.csv", row.names=F)
+      
+      library(migrateR)
+      
+      sublocs <- read.csv("indiv140340.csv")
+      sublocs$Date <- as.POSIXct(sublocs$Date)
+      
+      sublt <- as.ltraj(xy = sublocs[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = sublocs$Date, 
+                   # specify indiv 
+                   id = sublocs$AnimalID)
+      rlocs <- findrloc(sublt) 
+      
+      
+      # expand default duration on summer range to allow up to 8 months
+      dur8 <- pEst(u.r = 240) 
+      
+      
+      # define base model, rNSD with expanded duration parameter 
+      msub <- mvmtClass(sublt, p.est = dur8, rloc = rlocs$rloc)
+      fullmvmt(msub, out = "name") 
+
+      # plotting attempts
+      plot(msub)
+      plot(msub, ranked = F)
+      plot(msub, legend = T)
+      spatmig(sublt, msub)
+      
+      
+      
+      
+#### subsetting mvmts obj (for prelim visual plot inspection) ####
+      
+      dev.off()
+      test <- mb4
+      str(mb4)
+      test2 <- test[[1]]
+      plot(test2) # ok, that worked
+      test2 <- test[[1:3]] # that didn't
+      test2 <- test[[1,3]] # of course not
+      test2 <- test[2] #this does not extract ALL the info
+      test3 <- test[[2]]
+      plot(test3)
+      test4 <- c(test2, test3)
+      plot(test4) # newp
+      plot(test4[[1]]) # yup
+      plot(test4[[2]]) # yup
+      # fine, we'll do it quick and dirty, make new mvmts
+      
+      # random subset of 20 indivs
+      a <- data.frame(AnimalID = modindivs[sample(nrow(modindivs), 20), 1])
+      
+      # add a few "known" indivs
+      #b <- data.frame(AnimalID = factor(c(61730, 60450, 140480, 140560, 141490)))
+      b <- data.frame(AnimalID = factor(c(140320, 15020, 15045, 60280)))
+        
+      # combine 'em
+      subi <- bind_rows(a, b)
+      
+      # and subset 'em from original dataframe
+      sublocs <- modlocs
+      sublocs <- semi_join(modlocs, subi, by = "AnimalID") 
+      sublocs$AnimalID <- factor(sublocs$AnimalID)
+      unique(sublocs$AnimalID)
+      
+      #### Create ltraj object ### 
+      ltsub <- as.ltraj(xy = sublocs[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = sublocs$Date, 
+                   # specify indiv 
+                   id = sublocs$AnimalID)
+    
+      ##
+      
+      # identify best starting location for each indivdual
+      rlocssub <- findrloc(ltsub)
+    
+      # define base model, rNSD with expanded duration parameter 
+      mbsub <- mvmtClass(ltsub, p.est = dur8, rloc = rlocssub$rloc) # 4 conv issues
+      
+      # allow up to 80km2 mvmt within the same resident range
+      mbsub2 <- refine(mbsub, p.est = restest)
+      length(which(!fullmvmt(mbsub2))) # 2 convergence issues
+      
+      # only has to move 25 km2
+      mbsub4 <- refine(mbsub2, p.est = mv5)
+      length(which(!fullmvmt(mbsub4))) # 0 issues of course
+      
+      
+      ## 
+      # top mods (all require 2 months on summer range; require move 5km)
+      mtop1 <- topmvmt(mbsub, omit = "mixmig",  mrho = 60, mdelta = 25)
+      mtop2 <- topmvmt(mbsub2, omit = "mixmig",  mrho = 60, mdelta = 25)
+     # mtop3 <- topmvmt(mbsub3, omit = "mixmig",  mrho = 60, mdelta = 25)
+      mtop4 <- topmvmt(mbsub4, omit = "mixmig",  mrho = 60, mdelta = 25)
+      ##
+
+      # check whether classifications change in refined models            
+      table(names(mtop1)) 
+      table(names(mtop2)) # no change
+      table(names(mtop3)) # makes 1 mig a res (good? prob moved late)
+      table(names(mtop4)) # no change
+      
+    
+      ##
+##### plots ####
+      subindivs <- data.frame(AnimalID = unique(sublocs$AnimalID))
+      dev.off()
+      for(i in 1:nrow(subindivs)) {
+        plot(mbsub[[i]])
+      }
+      
+      
+      ##
+      # saving plots - subset
+      
+      num.plots <- nrow(subindivs)
+      my.plots <- vector(num.plots, mode='list')
+      
+      for(i in 1:num.plots) {
+        plot(mref1[[i]])
+        my.plots[[i]] <- recordPlot()
+      }
+      graphics.off()
+      
+      pdf('./test/myplots3.pdf', onefile = TRUE)
+      for(my.plot in my.plots) {
+        replayPlot(my.plot)
+      }
+      graphics.off()
+      
+      # holy goddamn fucking shitballs
+      
+      
+      # do it gridded?
+      par(mfrow=c(1,3))
+      # ew, no, saves each iteration of that
+      # id have to tell it to plot three at a time or something
+      # and frankly i don't give that much of a shit
+      
+      
+      
+            ##
+      # saving plots - all (looking for errors due to nonconvergence)
+      
+      num.plots <- nrow(modindivs)
+      my.plots <- vector(num.plots, mode='list')
+      
+      for(i in 1:num.plots) {
+        plot(mref1[[i]])
+        my.plots[[i]] <- recordPlot()
+      }
+      graphics.off()
+      
+      pdf('./test/myplots4.pdf', onefile = TRUE)
+      for(my.plot in my.plots) {
+        replayPlot(my.plot)
+      }
+      graphics.off()
+      
+      
+      
+      num.plots <- nrow(modindivs)
+      my.plots <- vector(num.plots, mode='list')
+      
+      for(i in 1:num.plots) {
+        plot(mb[[i]])
+        my.plots[[i]] <- recordPlot()
+      }
+      graphics.off()
+      
+      pdf('./test/myplots5-mb.pdf', onefile = TRUE)
+      for(my.plot in my.plots) {
+        replayPlot(my.plot)
+      }
+      graphics.off()
+      
+### compare including all initial constraints in same model ####
+    ### vs refine
+    
+
+    constr <- pEst(u.r = 240, u.k = log(80),  u.t = 150, l.d = 50)
+    mod <- mvmtClass(lt, p.est = constr)
+    length(which(!fullmvmt(mod))) # 99, holy balls
+    # ok so not doing this
+    
+#### check differences in top model selection after refining and not ####
+    ### bc most models that dind't converge initially didn't fit the data anyway
+    
+    
+    mcomp <- topmvmt(mb, omit = "mixmig", mrho = 60, mdelta = 25)
+    table(names(mcomp))
+    #yeah ok there's a pretty minor difference here
+    #base model has +1disp +1mig +2nom -4res
+    
+    # diff due to not having better res def?
+    mcomp2 <- topmvmt(mb2, omit = "mixmig", mrho = 60, mdelta = 25)
+    table(names(mcomp2))        
+    #now base model would have +1disp -1mig -1nom +1res
+    
+    
+#### check differences in top model selection if refine base model all at once ####
+    ### vs re-refining 3x
+    
+    mtest <- refine(mb, p.est = constr)
+    toptest <- topmvmt(mtest, omit = "mixmig", mrho = 60, mdelta = 25)
+    table(names(toptest))
+    
+    # this IS different
+    # refining all at once results in +2 disp, +2nom, -4res (=mig)
+        
+
+      
+      
+      
+      
+#### discrepancy in indivs included before and after re-adding HD314 (and fixing up code) ####
+      
+      
+    oldindivs <- read.csv("./rNSDresults/initialclassns.csv")
+    newindivs <- read.csv("modindivs-afterhd314readded.csv")
+    indivherds <- rawlocs %>%
+      dplyr::select(c(AnimalID, Herd)) %>%
+      distinct() %>%
+      mutate(AnimalID = factor(AnimalID), Herd = factor(Herd))
+    
+    diffa <- anti_join(oldindivs, newindivs, by = "AnimalID") %>%
+      dplyr::select(AnimalID) %>%
+      mutate(Diff = "OldOnly")
+    diffb <- anti_join(newindivs, oldindivs, by = "AnimalID") %>%
+      mutate(Diff = "NewOnly")
+    diff <- rbind(diffa, diffb) 
+    diff <- left_join(diff, indivherds, by = "AnimalID")
+    
+    summary(diff$Herd)
+    # 4 NAs are ski hill elk, they should be gone
+    # others are entire sample from dome and madison, yeesh, that's probably not right...
+    
+    ## issue: modlocs does have all popn data stored but lost it along the way
+    
+    # modlocs came from rawlocs
+    any(rawlocs$Herd == "HD314")
+    any(rawlocs$Herd == "Madison")
+    # and they are present there
+    
+    ## i think the issue was with the code subsetting to year of interest
+    
+    # already subsetted to herds of interest
+      # and removed locs prior to year of interest
+      # so don't need to worry about either of those things
+    
+    newnew <- modindivs %>%
+      left_join(indivherds, by = "AnimalID")
+    summary(newnew$Herd)
+    
+    # ok you effed up the east fork for sure, 
+    efk <- subset(rawlocs, Herd == "East Fork")
+    length(unique(efk$AnimalID))
+    
+    
+    # seeing whether slice() works with more than one grouping
+    df <- data.frame(id=c(1,1,1,2,2,2,3,3,3), 
+                 stopId=c("a","a","c","a","a","c","a","a","c"), 
+                 stopSequence=c(1,2,3,3,1,4,3,1,2))
+    test <- df %>%
+      group_by(id, stopId) %>%
+      slice(1) %>%
+      ungroup()
+    test2 <- df %>%
+      group_by(id, stopId) %>%
+      distinct()
+    
+    
+    
+#### figuring out missing value or infinity error with u.k = log(64) ####
+   
+    
+     
+    # this error did not occur prior to including HD314 in analyses
+    
+    # so first, look at the individuals tha are different between this and previous runs
+    
+    oldindivs <- read.csv("./test/initialclassns.csv")
+    newindivs <- modindivs
+    indivherds <- rawlocs %>%
+      dplyr::select(c(AnimalID, Herd)) %>%
+      distinct() %>%
+      mutate(AnimalID = factor(AnimalID), Herd = factor(Herd))
+    
+    diffa <- anti_join(oldindivs, newindivs, by = "AnimalID") %>%
+      dplyr::select(AnimalID) %>%
+      mutate(Diff = "OldOnly")
+    diffb <- anti_join(newindivs, oldindivs, by = "AnimalID") %>%
+      mutate(Diff = "NewOnly")
+    diff <- rbind(diffa, diffb) 
+    diff <- left_join(diff, indivherds, by = "AnimalID")
+          
+    
+    # alright, diff is that 4 ski hill elk were removed and 6 HD314 elk were added
+    # therefore it must be the HD 314 elk causing the issue, look at their plots first (185XXX)
+    
+    # don't notice anything obvious; double-check that error is from them
+    
+      hds <- filter(modlocs, Herd == "HD314")
+      hds <- droplevels(hds)
+
+      lthd <- as.ltraj(xy = hds[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = hds$Date, 
+                   # specify indiv 
+                   id = hds$AnimalID)
+    
+      # identify best starting location for each indivdual
+      rlocshd <- findrloc(lthd)
+    
+      # define base model, rNSD with expanded duration parameter 
+      mbhd <- mvmtClass(lthd, p.est = timing, rloc = rlocshd$rloc) 
+      
+      # allow up to 80km2 mvmt within the same resident range
+      mbhd2 <- refine(mbhd, p.est = uk64)
+      
+      # huh. no, the error does not occur when only using hd314 locations
+      
+      
+      ## only other diff i can think of is that i also made the u.t constraint now
+      ## so try various iterations of introducing constraints ##
+      
+      # put uk constraint in original model specification
+      a <- pEst(u.r = 240, u.t = 150, u.k = log(64))  
+      t1 <- mvmtClass(lt, p.est = a, rloc = rlocs$rloc) 
+      # yes this throws the error
+      
+      # put uk constraint in original model specification and remove ut
+      b <- pEst(u.r = 240, u.k = log(64))  
+      t2 <- mvmtClass(lt, p.est = b, rloc = rlocs$rloc) 
+      # this also throws the error, so it can't be solely related to ut
+      
+      # make u.k the only constraint
+      c <- pEst(u.k = log(64))
+      t3 <- mvmtClass(lt, p.est = c, rloc = rlocs$rloc)
+      # this also throws the error
+      
+      # only use u.k in refine
+      t4 <- mvmtClass(lt, rloc = rlocs$rloc)  
+      t5 <- refine(t4, p.est = uk64)  
+      # this also throws the error
+    
+      
+      ## verify error does not occur with previous data
+      ## {in separate rstudio session}
+      
+      # see if packages are loaded in new sesh
+      ?pEst
+      
+      # nope, rerun code from beginning
+      
+      wd_workcomp <- "C:\\Users\\kristin.barker\\Documents\\GitHub\\Migration\\test"
+      wd_laptop <- "C:\\Users\\kjbark3r\\Documents\\GitHub\\Migration\\test"
+      wd_worklaptop <- "C:\\Users\\kristin\\Documents\\Migration\\test"
+      if (file.exists(wd_workcomp)) {setwd(wd_workcomp)
+      } else {
+        if(file.exists(wd_laptop)) {setwd(wd_laptop)
+        } else {
+          setwd(wd_worklaptop)
+        }
+      }
+      rm(wd_workcomp, wd_laptop, wd_worklaptop)
+   
+    
+      library(migrateR) 
+      source("NSDresults/test_plotmvmt2.R")
+      library(dplyr) 
+      
+      load("nsd-baselocs.RData")
+    
+      
+      # base model with both timing constraints (duration and start)
+      timing <- pEst(u.r = 240, u.t = 150)  
+      mbase <- mvmtClass(lt, p.est = timing, rloc = rlocs$rloc)
+      
+      # refined with u.k
+      uk64 <- pEst(u.k = log(64))
+      mref1 <- refine(mbase, p.est = uk64)
+      # confirmed, this works fine. what the shit.
+      
+      
+      # ok think, this makes sense, but how?
+      
+      # issue is the uk constraint, kappa parameter
+      # kappa is the log of the movement rate per day
+      
+      # only other thing i can think of is it's due to diff random locs being selected
+      # but if that's an issue then that's a pretty big problem in general that 
+      # should be addressed (and i doubt that would be it anyway)
+      
+      
+      
+      # alright let's try subsetting each population to pinpoint the problem
+      # back to original rstudio sesh
+      
+      
+      unique(modlocs$Herd)
+      sap <- filter(modlocs, Herd == "Sapphire")
+      elk <- filter(modlocs, Herd == "Elkhorns")
+      nmd <- filter(modlocs, Herd == "NMadison")
+      tob <- filter(modlocs, Herd == "Tobacco Roots")
+      mad <- filter(modlocs, Herd == "Madison") #E
+      dom <- filter(modlocs, Herd == "Dome")
+      efk <- filter(modlocs, Herd == "East Fork")      
+      wfk <- filter(modlocs, Herd == "West Fork")      
+      cfk <- filter(modlocs, Herd == "Clarks Fork")
+      sil <- filter(modlocs, Herd == "Silver Run")
+      bla <- filter(modlocs, Herd == "Blacktail")
+      mil <- filter(modlocs, Herd == "Mill Creek")      
+      gre <- filter(modlocs, Herd == "Greeley")
+      pio <- filter(modlocs, Herd == "Pioneers")
+      sag <- filter(modlocs, Herd == "Sage Creek")      
+      
+      
+      ## SAPPHIRE ##
+      sap <- droplevels(sap)
+      ltsap <- as.ltraj(xy = sap[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = sap$Date, 
+                   # specify indiv 
+                   id = sap$AnimalID)
+      # identify best starting location for each indivdual
+      rlocssap <- findrloc(ltsap)
+      # define base model, rNSD with expanded duration parameter 
+      mbsap <- mvmtClass(ltsap, p.est = timing, rloc = rlocssap$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbsap2 <- refine(mbsap, p.est = uk64)
+      ## NO ERROR ##
+      
+      
+      
+      ## ELKHORNS ##
+      elk <- droplevels(elk)
+      ltelk <- as.ltraj(xy = elk[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = elk$Date, 
+                   # specify indiv 
+                   id = elk$AnimalID)
+      # identify best starting location for each indivdual
+      rlocselk <- findrloc(ltelk)
+      # define base model, rNSD with expanded duration parameter 
+      mbelk <- mvmtClass(ltelk, p.est = timing, rloc = rlocselk$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbelk2 <- refine(mbelk, p.est = uk64)
+      ## NO ERROR ##
+      
+      
+      
+      ## NMAD ##
+      nmd <- droplevels(nmd)
+      ltnmd <- as.ltraj(xy = nmd[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = nmd$Date, 
+                   # specify indiv 
+                   id = nmd$AnimalID)
+      # identify best starting location for each indivdual
+      rlocsnmd <- findrloc(ltnmd)
+      # define base model, rNSD with expanded duration parameter 
+      mbnmd <- mvmtClass(ltnmd, p.est = timing, rloc = rlocsnmd$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbnmd2 <- refine(mbnmd, p.est = uk64)
+      ## NO ERROR ##
+      
+      
+      
+      ## TOBROOTS ##
+      tob <- droplevels(tob)
+      lttob <- as.ltraj(xy = tob[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = tob$Date, 
+                   # specify indiv 
+                   id = tob$AnimalID)
+      # identify best starting location for each indivdual
+      rlocstob <- findrloc(lttob)
+      # define base model, rNSD with expanded duration parameter 
+      mbtob <- mvmtClass(lttob, p.est = timing, rloc = rlocstob$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbtob2 <- refine(mbtob, p.est = uk64)
+      ## NO ERROR ##
+      
+      
+      
+      ## MADISON ##
+      mad <- droplevels(mad)
+      ltmad <- as.ltraj(xy = mad[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = mad$Date, 
+                   # specify indiv 
+                   id = mad$AnimalID)
+      # identify best starting location for each indivdual
+      rlocsmad <- findrloc(ltmad)
+      # define base model, rNSD with expanded duration parameter 
+      mbmad <- mvmtClass(ltmad, p.est = timing, rloc = rlocsmad$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbmad2 <- refine(mbmad, p.est = uk64)
+      ## GOTCHA ##
+      
+      
+      ## DOME ##
+      dom <- droplevels(dom)
+      ltdom <- as.ltraj(xy = dom[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = dom$Date, 
+                   # specify indiv 
+                   id = dom$AnimalID)
+      # identify best starting location for each indivdual
+      rlocsdom <- findrloc(ltdom)
+      # define base model, rNSD with expanded duration parameter 
+      mbdom <- mvmtClass(ltdom, p.est = timing, rloc = rlocsdom$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbdom2 <- refine(mbdom, p.est = uk64)
+      # NO ERROR #
+      
+      
+      
+  ## alright, just remove madison to see whether that's the only issue
+      
+      modlocs2 <- filter(modlocs, Herd != "Madison")
+      modlocs2 <- droplevels(modlocs2)
+      lt2 <- as.ltraj(xy = modlocs2[,c("X", "Y")], 
+               # note Date must be POSIXct
+               date = modlocs2$Date, 
+               # specify indiv 
+               id = modlocs2$AnimalID)
+      rlocs2 <- findrloc(lt2)
+      m2base <- mvmtClass(lt2, p.est = timing, rloc = rlocs2$rloc)
+      m2ref1 <- refine(m2base, p.est = uk64)
+      # shit. still error. check remaining populations...
+      
+      
+      
+            
+      ## EFK ##
+      efk <- droplevels(efk)
+      ltefk <- as.ltraj(xy = efk[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = efk$Date, 
+                   # specify indiv 
+                   id = efk$AnimalID)
+      # identify best starting location for each indivdual
+      rlocsefk <- findrloc(ltefk)
+      # define base model, rNSD with expanded duration parameter 
+      mbefk <- mvmtClass(ltefk, p.est = timing, rloc = rlocsefk$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbefk2 <- refine(mbefk, p.est = uk64)
+      # NO ERROR #
+      
+      
+      ## wfk ##
+      wfk <- droplevels(wfk)
+      ltwfk <- as.ltraj(xy = wfk[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = wfk$Date, 
+                   # specify indiv 
+                   id = wfk$AnimalID)
+      # identify best starting location for each indivdual
+      rlocswfk <- findrloc(ltwfk)
+      # define base model, rNSD with expanded duration parameter 
+      mbwfk <- mvmtClass(ltwfk, p.est = timing, rloc = rlocswfk$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbwfk2 <- refine(mbwfk, p.est = uk64)
+      # NO ERROR (but only 1 indiv, wtf...) #
+      
+      
+      
+      ## cfk ##
+      cfk <- droplevels(cfk)
+      ltcfk <- as.ltraj(xy = cfk[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = cfk$Date, 
+                   # specify indiv 
+                   id = cfk$AnimalID)
+      # identify best starting location for each indivdual
+      rlocscfk <- findrloc(ltcfk)
+      # define base model, rNSD with expanded duration parameter 
+      mbcfk <- mvmtClass(ltcfk, p.est = timing, rloc = rlocscfk$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbcfk2 <- refine(mbcfk, p.est = uk64)      
+      # NO ERROR #
+
+      
+      
+      ## sil ##
+      sil <- droplevels(sil)
+      ltsil <- as.ltraj(xy = sil[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = sil$Date, 
+                   # specify indiv 
+                   id = sil$AnimalID)
+      # identify best starting location for each indivdual
+      rlocssil <- findrloc(ltsil)
+      # define base model, rNSD with expanded duration parameter 
+      mbsil <- mvmtClass(ltsil, p.est = timing, rloc = rlocssil$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbsil2 <- refine(mbsil, p.est = uk64)      
+      # NO ERROR #
+      
+
+      ## bla ##
+      bla <- droplevels(bla)
+      ltbla <- as.ltraj(xy = bla[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = bla$Date, 
+                   # specify indiv 
+                   id = bla$AnimalID)
+      # identify best starting location for each indivdual
+      rlocsbla <- findrloc(ltbla)
+      # define base model, rNSD with expanded duration parameter 
+      mbbla <- mvmtClass(ltbla, p.est = timing, rloc = rlocsbla$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbbla2 <- refine(mbbla, p.est = uk64)  
+      # NO ERROR #
+      
+      
+      ## mil ##
+      mil <- droplevels(mil)
+      ltmil <- as.ltraj(xy = mil[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = mil$Date, 
+                   # specify indiv 
+                   id = mil$AnimalID)
+      # identify best starting location for each indivdual
+      rlocsmil <- findrloc(ltmil)
+      # define base model, rNSD with expanded duration parameter 
+      mbmil <- mvmtClass(ltmil, p.est = timing, rloc = rlocsmil$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbmil2 <- refine(mbmil, p.est = uk64)  
+      # NO ERROR #
+      
+      
+      ## greeley ##
+      gre <- droplevels(gre)
+      ltgre <- as.ltraj(xy = gre[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = gre$Date, 
+                   # specify indiv 
+                   id = gre$AnimalID)
+      # identify best starting location for each indivdual
+      rlocsgre <- findrloc(ltgre)
+      # define base model, rNSD with expanded duration parameter 
+      mbgre <- mvmtClass(ltgre, p.est = timing, rloc = rlocsgre$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbgre2 <- refine(mbgre, p.est = uk64)      
+      # NO ERROR #
+      
+      
+      ## pio ##
+      pio <- droplevels(pio)
+      ltpio <- as.ltraj(xy = pio[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = pio$Date, 
+                   # specify indiv 
+                   id = pio$AnimalID)
+      # identify best starting location for each indivdual
+      rlocspio <- findrloc(ltpio)
+      # define base model, rNSD with expanded duration parameter 
+      mbpio <- mvmtClass(ltpio, p.est = timing, rloc = rlocspio$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbpio2 <- refine(mbpio, p.est = uk64)
+      # ERROR #
+      
+      
+      
+      ## sag ##
+      sag <- droplevels(sag)
+      ltsag <- as.ltraj(xy = sag[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = sag$Date, 
+                   # specify indiv 
+                   id = sag$AnimalID)
+      # identify best starting location for each indivdual
+      rlocssag <- findrloc(ltsag)
+      # define base model, rNSD with expanded duration parameter 
+      mbsag <- mvmtClass(ltsag, p.est = timing, rloc = rlocssag$rloc) 
+      # allow up to 80km2 mvmt within the same resident range
+      mbsag2 <- refine(mbsag, p.est = uk64)      
+      
+      
+      
+  ##  verify just madison and pioneers causing issue ##
+      
+      modlocs3 <- filter(modlocs, Herd != "Madison" & Herd != "Pioneers")
+      modlocs3 <- droplevels(modlocs3)
+      unique(modlocs3$Herd)
+      lt3 <- as.ltraj(xy = modlocs3[,c("X", "Y")], 
+               # note Date must be POSIXct
+               date = modlocs3$Date, 
+               # specify indiv 
+               id = modlocs3$AnimalID)
+      rlocs3 <- findrloc(lt3)
+      m3base <- mvmtClass(lt3, p.est = timing, rloc = rlocs3$rloc)
+      m3ref1 <- refine(m3base, p.est = uk64)
+      # yes, ok, error does not occur when those popns are removed
+      # so drill into mad and pio. first look at plots
+      
+      
+      # 61150 migrant rNSD goes negative, that can't be good
+      # ditto 61640
+      # PM120080 may as well, just barely
+      # alright, try it with these indivs removed
+      
+      madpio <- filter(modlocs, Herd == "Madison" | Herd == "Pioneers")
+      madpio <- droplevels(madpio)
+      length(unique(madpio$AnimalID))
+      madpiosub <- filter(madpio, AnimalID != 61150 & AnimalID != 61640 & AnimalID != "PM120080")
+      length(unique(madpiosub$AnimalID))     
+      
+      modlocs4 <- droplevels(madpiosub)
+      lt4 <- as.ltraj(xy = modlocs4[,c("X", "Y")], 
+               # note Date must be POSIXct
+               date = modlocs4$Date, 
+               # specify indiv 
+               id = modlocs4$AnimalID)
+      rlocs4 <- findrloc(lt4)
+      m4base <- mvmtClass(lt4, p.est = timing, rloc = rlocs4$rloc)
+      m4ref1 <- refine(m4base, p.est = uk64)
+      # nope, still issue, recheck plots, looking for convergence issues
+      
+      # PM120094, PM120066 no res
+      madpiosub2 <- filter(madpiosub, AnimalID != "PM120094" & AnimalID != "PM120066")
+      madpiosub2 <- droplevels(madpiosub2)
+      length(unique(madpiosub2$AnimalID))  
+      modlocs5 <- droplevels(madpiosub2)
+      lt5 <- as.ltraj(xy = modlocs5[,c("X", "Y")], 
+               # note Date must be POSIXct
+               date = modlocs5$Date, 
+               # specify indiv 
+               id = modlocs5$AnimalID)
+      rlocs5 <- findrloc(lt5)
+      m5base <- mvmtClass(lt5, p.est = timing, rloc = rlocs5$rloc)
+      m5ref1 <- refine(m5base, p.est = uk64)
+      # nope, still issue. guess i gotta try each individual, ughhhhhh
+      
+      # make sure issue still occurs with initial constraintt o save a step
+      m6base <- mvmtClass(lt5, p.est = uk64, rloc = rlocs5$rloc)
+      # yep ok
+      
+      # let's see if we can figure out try()
+      try(mvmtClass(lt5, p.est = uk64, rloc = rlocs5$rloc))
+      
+
+      te <- mpindiv[2,1]
+      test <- filter(madpio, AnimalID == te)
+      
+      
+      
+      madpio <- filter(modlocs, Herd == "Madison" | Herd == "Pioneers")
+      madpio <- droplevels(madpio)
+      mpindiv <- data.frame(AnimalID = unique(madpio$AnimalID))     
+      mplt <- as.ltraj(xy = madpio[,c("X", "Y")], date = madpio$Date, id = madpio$AnimalID)
+      mprloc <- findrloc(mplt)
+      
+      mprloc[1]
+      mprloc[[1]]
+      mprloc[1,1]
+      mprloc[1,]
+      
+      str(mplt[1])
+      
+      
+      for (i in 1:nrow(mpindiv)) {
+        ind <- as.character(mpindiv[i,1])
+        #ind <- droplevels(ind)
+        #ilocs <- filter(madpio, AnimalID == ind)
+        #ilocs <- droplevels(ilocs)
+        #ilocs$AnimalID = as.factor(ilocs$AnimalID)
+        #ilt <- as.ltraj(xy = ilocs[,c("X", "Y")], date = ilocs$Date, id = ilocs$AnimalID)
+        #irloc <- findrloc(ilt)
+        print(ind)
+        try(mvmtClass(mplt[i], p.est = 64))
+      }
+
+        
+      # ok. i have failed to subset indivs and create indiv ltrajs
+      # i have failed to subset from within the group ltraj
+      # i cannot fucking figure out how to identify problem individuals
+      # ok, think, you got this. start over.
+
+      
+            
+      madpio <- filter(modlocs, Herd == "Madison" | Herd == "Pioneers")
+      madpio <- droplevels(madpio)
+      mpindiv <- data.frame(AnimalID = unique(madpio$AnimalID))     
+      mplt <- as.ltraj(xy = madpio[,c("X", "Y")], date = madpio$Date, id = madpio$AnimalID)
+      mprloc <- findrloc(mplt)
+      mm <- mvmtClass(mplt, p.est = uk64)
+      # that worked?!
+      mm2 <- mvmtClass(mplt, rloc = mprloc$rloc, p.est = uk64)
+      # oh. and that didn't. 
+      # so the issue was the fucking rlocs all along? fucking christ.
+      View(mprloc)
+      table(rlocs$rloc)
+      hist(rlocs$rloc)
+      
+      
+      
+      # steps to address
+      
+      # 1. rerun full model, all indivs, without using rlocs
+      #   1a. check whether top models change
+      # 2. if top models do not change, roll on
+      # 3. if top models do change, try subsetting madpio by rloc to id problem indivs
+      
+      
+      mbase2 <- mvmtClass(lt, p.est = timing)
+      mbase2ref <- refine(mbase2, p.est = uk64)
+      mbase2ref2 <- refine(mbase2, p.est = ld50)
+      length(which(!fullmvmt(mref2))) # 15 remaining convergence issues
+
+      
+    # identify top model for each individual #
+      
+      # require 2 months on summer range; require move 5km
+      mtop2 <- topmvmt(mbase2ref2, omit = "mixmig", mrho = 60, mdelta = 25)
+      topmods2 <- data.frame(AnimalID = modindivs, PrelimClassn = names(mtop2))
+      write.csv(topmods2, file = "./rNSDresults/initialclassns-NSD.csv", row.names=F)
+      
+      topmodsdiff <- topmods %>%
+        rename(rNSDclassn = MigClassn) %>%
+        left_join(topmods2, by = "AnimalID") %>%
+        rename(NSDclassn = PrelimClassn) %>%
+        mutate(Samesies = ifelse(rNSDclassn == NSDclassn, 1, 0))
+      any(topmodsdiff$Samesies == 0)
+      any(topmodsdiff$Samesies == 1)
+      length(which(topmodsdiff$Samesies == 0))
+      diffs <- filter(topmodsdiff, Samesies == 0)
+      # 67 differences, hm  
+      # looking at them it appears the rlocs version does a better job of capturing real world
+      # which means i still need to figure out the problem individuals
+      
+      
+      
+      
+      
+            
+            
+      madpio <- filter(modlocs, Herd == "Madison" | Herd == "Pioneers")
+      madpio <- droplevels(madpio)
+      mpindiv <- data.frame(AnimalID = unique(madpio$AnimalID))     
+      mplt <- as.ltraj(xy = madpio[,c("X", "Y")], date = madpio$Date, id = madpio$AnimalID)
+      mprloc <- findrloc(mplt)
+      mm <- mvmtClass(mplt, p.est = uk64)
+      # that worked?!
+      mm2 <- mvmtClass(mplt, rloc = mprloc$rloc, p.est = uk64)
+      # oh. and that didn't. 
+      # so the issue was the fucking rlocs all along? fucking christ.
+      View(mprloc)
+      table(rlocs$rloc)
+      hist(rlocs$rloc)
+      
+      z <- droplevels(filter(mprloc, rloc == 1))
+      y <- droplevels(semi_join(madpio, z, by = c("AnimalID" = "burst")))
+      x <- as.ltraj(xy = y[,c("X", "Y")], date = y$Date, id = y$AnimalID)
+      w <- findrloc(x)
+      
+      
+      rlocnums <- data.frame(num = unique(mprloc$rloc))
+      
+      for(i in 1:nrow(rlocnums)){
+        
+        paste0("grp", i)
+        
+        isub <- droplevels(filter(mprloc, rloc == i))
+        
+        lsub <- droplevels(semi_join(madpio, isub, by = c("AnimalID" = "burst")))
+        ltsub <- as.ltraj(xy = lsub[,c("X", "Y")], date = lsub$Date, id = lsub$AnimalID)
+        rsub <- findrloc(ltsub)
+        
+        try(mvmtClass(ltsub, p.est = uk64, rloc = rsub$rloc))
+      }
+      
+    # yeah ok you prob shouldve subsetted rlocs correctly the first time
+      # but this works better anyway
+      
+      # errors occur in rloc = 14 and rloc = 15 only
+      
+      # so do you change this for all of them? 
+      # id prefer to constrain rlocs to <14 for all indivs when first creating it if possible
+      # yep, not only possible... it's easy!
+      
+      
+      
+  #### subsetting 2 random locs per day (one day, one night) ####
+      
+          
+
+      
+    testlocs <- rawlocs %>%
+        # just test on 2 indivs
+        filter(AnimalID == 140060 | AnimalID == 140480) %>%
+        # create POSIXct DateTime for ltraj object; pull just date (Day) from this
+        mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
+        mutate(Day = as.Date(DateTime)) %>%
+        # identify time of day
+        mutate(Hour = as.numeric(substr(Time, 0, 2))) %>%
+        mutate(TimeOfDay = ifelse(Hour >= 8 & Hour <= 20, "Day", "Night")) %>%
+        # randomly select one loc per time of day (so, 2 locs per 24-hour period) per indiv
+        group_by(AnimalID, Day, TimeOfDay) %>%
+        sample_n(1) %>%
+        ungroup()
+      
+      
+      
+  
+                
+  #### fixing "duplicate" datetime issue when creating ltraj object ####
+      
+      test <- modlocs
+      test$Date <- as.POSIXct(strptime(test$DateTime, format = "%Y-%m-%d %H:%M:%S"))
+  #### Convert Lat/Longs to UTMs ####
+  test <- as.data.frame(spTransform(SpatialPointsDataFrame(
+                            data.frame("X" = test$Longitude, 
+                                       "Y" = test$Latitude), 
+                            test, proj4string = latlong), utm))
+
+  #### Create ltraj object ### 
+  testlt <- as.ltraj(xy = test[,c("X", "Y")], 
+                 # note Date must be POSIXct
+                 date = test$Date, 
+                 # specify indiv 
+                 id = test$AnimalID)
+  # still have issue
+    
+  test2 <- modlocs
+  test2 <- test2[1:1000,]
+  test2$Date <- as.POSIXct(test2$DateTime, format = "%Y-%m-%d %H:%M:%S")
+    test2 <- as.data.frame(spTransform(SpatialPointsDataFrame(
+                            data.frame("X" = test2$Longitude, 
+                                       "Y" = test2$Latitude), 
+                            test2, proj4string = latlong), utm))
+    test2 <- droplevels(test2)
+      test2lt <- as.ltraj(xy = test2[,c("X", "Y")], 
+                 # note Date must be POSIXct
+                 date = test2$Date, 
+                 # specify indiv 
+                 id = test2$AnimalID)
+      
+      ## identify duplicates ##
+      
+      test <- modlocs %>%
+        group_by(AnimalID, Date) %>%
+        distinct() %>%
+        mutate(n = n()) %>%
+        filter(n == 2)
+
+      View(test)
+      
+      # I HATE DAYLIGHT SAVINGS TIME
+      
+
+         test <- modlocs
+      test$Date <- as.POSIXct(strptime(test$DateTime, format = "%Y-%m-%d %H:%M:%S"))
+  #### Convert Lat/Longs to UTMs ####
+  test <- as.data.frame(spTransform(SpatialPointsDataFrame(
+                            data.frame("X" = test$Longitude, 
+                                       "Y" = test$Latitude), 
+                            test, proj4string = latlong), utm))
+      test <- test %>%
+        filter(!is.na(Date))
+        #### Create ltraj object ### 
+  testlt <- as.ltraj(xy = test[,c("X", "Y")], 
+                 # note Date must be POSIXct
+                 date = test$Date, 
+                 # specify indiv 
+                 id = test$AnimalID)
+  
+  modlocs <- modlocs %>% filter(!is.na(Date))
+  
+  
+  
+  #### why the fuck are there still duplicate dates?! ####
+  
+  
+        
+      test <- modlocs %>%
+        group_by(AnimalID, Date) %>%
+        distinct() %>%
+        mutate(n = n()) %>%
+        filter(n == 2)
+
+      View(test)
+      
+      
+      
+  #### infinity produced error AGAIN now that dates are fixed, uuugh ####
+      
+      # last time this was due to rlocs, pulling code from above to check whether that's still the case
+      
+      testmbase <- mvmtClass(lt, p.est = timing) # same base model, just without using rlocs
+      length(which(!fullmvmt(testmbase))) # 40 convergence issues, more than with rlocs
+      testmref1 <- refine(testmbase, p.est = uk64) # refine() that causes error
+      # confirmed, not using rlocs solves the issue
+      
+      # steps to address
+      
+      # 1. determine whether excluding rlocs appreciably changes results
+      # 2. if it does, identify individuals causing the error and manually change their rlocs
+      # 3. if it does not, roll with NSD rather than rNSD
+      
+ # STEP 1
+        
+      # migrant only has to move 50 km2 (to incl short-distance migrants)
+      ld50 <- pEst(u.r = 240, u.t = 150, l.d = 50)
+      testmref2 <- refine(testmref1, p.est = ld50)
+      length(which(!fullmvmt(testmref2))) # only 8 remaining convergence issues
+
+      
+    # identify top model for each individual #
+      
+      # require 2 months on summer range; require move 5km
+      testmtop <- topmvmt(testmref2, omit = "mixmig", mrho = 60, mdelta = 25)
+      testtopmods <- data.frame(AnimalID = modindivs, PrelimClassn = names(testmtop))
+      write.csv(testtopmods, file = "./rNSDresults/test4-norlocs/initialclassns.csv", row.names=F)
+      
+      # read in results of a prior run 
+      testold <- read.csv("./rNSDresults/test3-whereinoticedrndmlocissue/compareclassns-test1test3.csv")
+      
+      testcomp <- testold %>%
+        rename(run1R = PrelimClassn, run2R = migrateRclassn, run1ME = NewBehav, ren2ME = behavClassn) %>%
+        left_join(testtopmods, by = "AnimalID") %>%
+        rename(thisrun = PrelimClassn) %>%
+        mutate(run2R = ifelse(run2R == "nomad", "disperser", paste(run2R))) %>%
+        mutate(diff1 = ifelse(thisrun == run1R, 0, 1)) %>%
+        mutate(diff2 = ifelse(thisrun == run2R, 0, 1)) %>%
+        mutate(difftot = diff1+diff2)
+      testdiffs <- testcomp %>%
+        filter(difftot > 0)
+      write.csv(testdiffs, './rNSDresults/test4-norlocs/rsltscomparison.csv', row.names=F)
+      
+     ## plots ###
+
+      num.plots <- nrow(modindivs)
+      my.plots <- vector(num.plots, mode='list')
+      
+      for(i in 1:num.plots) {
+        plot(testmref2[[i]])
+        my.plots[[i]] <- recordPlot()
+      }
+      graphics.off()
+      
+      pdf('./rNSDresults/test4-norlocs/migbehav-plots-LINES.pdf', onefile = TRUE)
+      for(my.plot in my.plots) {
+        replayPlot(my.plot)
+      }
+      graphics.off()
+      
+      
+      
+      ## ok somethings up, there is no fucking way these are the same individuals in these plots
+      ## plots for, e.g., 140600 and 140480 look ENTIRELY different between some of these runs
+      
+      
+  #### checking out unclassified points ("outliers or points in transit") ####
+      
+      # 141000 (not likely issue)
+      test <- spatmig(lt[26], testmref2[26]) # sweet, stored as list of numbers
+      table(test)
+      792-304-322 # 166 unclassified
+      166/792 # 21 pct
+      
+      # 140980 (maybe issue)
+      test <- spatmig(lt[25], testmref2[25]) # sweet, stored as list of numbers
+      table(test)
+      792-433-242 # 117 unclassified
+      # ok so outliers are not n issue for her
+      
+      # 141150 (likely issue)
+      test <- spatmig(lt[34], testmref2[34]) # sweet, stored as list of numbers
+      table(test)
+      792-267-210
+      315/792 # 40% unclassified, could explain issue
+      
+      # 31113073 [77]
+      test <- spatmig(lt[77], testmref2[77]) # sweet, stored as list of numbers
+      table(test)
+      791-449-118
+      224/791 # 28%, so maybe consider >25%?
+      
+      
+    #### rNSD issue is a thing, wah wah ####    
+      
+      # eg 140480, 140600. so...
+      
+   # STEP 2
+      
+      # rNSD does seem important to use; i expect it to clear up the DIFFINDIVS issue
+      
+      # so, start by identifying indivs causing infinity error
+      # then try just iteratively reducing it by only one day until issues hopefully go away
+
+      # define parameter causing the issue
+      uk64 <- pEst(u.k = log(64))
+      
+      # dataframe to store error messages in
+      errors <- data.frame(AnimalID = unique(modlocs$AnimalID), Err = NA)
+      
+      # for each individual
+      for(i in 1:nrow(rlocs)) {
+        
+        # subset its locations
+        ilocs <- droplevels(semi_join(modlocs, rlocs[i,], by = c("AnimalID" = "burst")))
+        
+        # make it ltraj
+        ilt <- as.ltraj(xy = ilocs[,c("X", "Y")], date = ilocs$Date, id = ilocs$AnimalID)
+        
+        # try the model
+        tryCatch(mvmtClass(ilt, p.est = uk64, rloc = rlocs[i,"rloc"]), error = function(e) {
+                errors[i,"Err"] <<- conditionMessage(e)
+                NULL
+            })
+      }
+      # fuck. yes.
+      
+      errorindivs <- errors %>%
+        filter(!is.na(Err)) %>%
+        left_join(rlocs, by = c("AnimalID" = "burst"))
+        
+
+      # replace rlocs with date just prior
+      rloctest <- rlocs
+      rloctest$newrloc <- ifelse(rloctest$burst == 60900, rloctest$rloc-1, rloctest$rloc)
+      
+      rloctest <- rlocs
+      rloctest$newrloc <- ifelse(rloctest$burst == errorindivs[1,1] | rloctest$burst == errorindivs[2,1] | 
+                                 rloctest$burst == errorindivs[3,1], rloctest$rloc-1, rloctest$rloc)
+      rloctest$DDiff = rlocs$newrloc - rlocs$rloc
+        
+        
+               
+  #### examine percent of outliers per indiv ####
+      
+      
+        # create list to store spatmig outputs in
+        pts <- list()  
+        
+      # for each individual
+      for(i in 1:nrow(indivs)) {
+        # store list of point classifications
+        pts[[i]] <- spatmig(lt[i], mref2[i], graph = F)
+        
+        # extract length of list, ppn that's NULL (i think)
+      }
+      
+      
+    test <- pts[5]
+    length(test[[1]])
+    # i have a list of lists
+    # each of those sublists is just a list of 1
+    # and you want to extract information from that list of 1
+    # test is one sublist
+    test[[1]] # ok this is everything in the list
+    length(test[[1]])
+    lengths(test[[1]]) # great, this is the number i want
+    # now how do i count things inside there?
+    lengths(which(!is.na(test[[1]])))
+    test[[1]][1] # still everything
+    test[[1]][[1]] # still everything
+    
+    length(test[[1]][[1]])
+    length(which(is.na(test[[1]][[1]])))
+    
+    
+    # after running through many iterations
+    # i do not think this will be informative
+    test <- pts[21]
+    length(which(is.na(test[[1]][[1]])))/lengths(test[[1]])
+    
+
+    
