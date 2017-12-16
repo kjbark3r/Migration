@@ -103,8 +103,11 @@
       # create POSIXct DateTime for ltraj object; pull just date (Day) from this
       mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
       mutate(Day = as.Date(DateTime)) %>%
-      # randomly select one loc per day per indiv
-      group_by(AnimalID, Day) %>%
+      # identify time of day
+      mutate(Hour = as.numeric(substr(Time, 0, 2))) %>%
+      mutate(TimeOfDay = ifelse(Hour >= 8 & Hour <= 20, "Day", "Night")) %>%
+      # randomly select one loc per time of day (so, 2 locs per 24-hour period) per indiv
+      group_by(AnimalID, Day, TimeOfDay) %>%
       sample_n(1) %>%
       ungroup() %>%
       # identify 1st date of data
@@ -114,12 +117,9 @@
       ungroup() %>%
       # only include 1st full yr of data, plus extra month for full return to winter
       filter(Day <= Day1 + 395) %>% 
-      # # only include individuals who  had time to get back to winter range (appx 9mo)
-      # group_by(AnimalID) %>%
-      # filter(n() > 275) %>%
-      # ungroup() %>%
-      # do NOT specify format with time to avoid daylight savings time NAs 
-      mutate(Date = as.POSIXct(DateTime))
+      # specify datetime format and remove daylight savings time NAs 
+      mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
+      filter(!is.na(Date))
    
     # remove any stored factor levels that above code removed
     modlocs <- droplevels(modlocs)
@@ -149,9 +149,51 @@
                  # specify indiv 
                  id = modlocs$AnimalID)
     
-   
-    #### store ####
+  
+   #### Identify most parsimonious starting loc for rNSD ####
+    rlocs <- findrloc(lt)
+
+  
+  
+    #### store progress ####
     save.image(file = "nsd-baselocs.RData")  
+  
+  
+  
+   #### Find indivs whose models produce an error due to rloc; give them new rloc
+  
+     # define parameter causing the issue
+      uk64 <- pEst(u.k = log(64))
+      
+      # create dataframe to store error messages in
+      errors <- data.frame(AnimalID = unique(modlocs$AnimalID), Err = NA)
+      
+      # for each individual
+      for(i in 1:nrow(rlocs)) {
+        
+        # subset its locations
+        ilocs <- droplevels(semi_join(modlocs, rlocs[i,], by = c("AnimalID" = "burst")))
+        
+        # make it ltraj
+        ilt <- as.ltraj(xy = ilocs[,c("X", "Y")], date = ilocs$Date, id = ilocs$AnimalID)
+        
+        # try the model and store error message if any
+        tryCatch(mvmtClass(ilt, p.est = uk64, rloc = rlocs[i,"newrloc"]), error = function(e) {
+                errors[i,"Err"] <<- conditionMessage(e)
+                NULL
+            })
+      }
+
+      # identify individuals who had errors
+      errorindivs <- errors %>%
+        filter(!is.na(Err)) %>%
+        left_join(rlocs, by = c("AnimalID" = "burst"))
+      
+      # change their rloc to the immediately preceding date and rerun above to verify fixed
+      rlocs$newrloc <- ifelse(rlocs$burst == errorindivs[1,1] | rlocs$burst == errorindivs[2,1] | 
+                                 rlocs$burst == errorindivs[3,1], rlocs$rloc-1, rlocs$rloc)
+
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
@@ -161,9 +203,9 @@
 ### ### ### ### ### ###     
  
   
-    # identify most parsimonious starting loc for rNSD (within 2 weeks of start date)
-    rlocs <- findrloc(lt, max.rloc = 13)
-    
+
+  
+  
     
     # define initial parameter constraints based on biological definition of migration
       
@@ -174,8 +216,8 @@
     
     # define base model, rNSD with expanded duration parameter and restricted timing
       
-      mbase <- mvmtClass(lt, rloc = rlocs$rloc, p.est = timing)
-      length(which(!fullmvmt(mbase))) # XXX convergence issues
+      mbase <- mvmtClass(lt, rloc = rlocs$newrloc, p.est = timing)
+      length(which(!fullmvmt(mbase))) # 35 convergence issues
     
     
     # refine base model to address convergence issues #
@@ -183,30 +225,27 @@
       # allow up to 8km daily displacement within the same resident range
       uk64 <- pEst(u.k = log(64))
       mref1 <- refine(mbase, p.est = uk64)
-      length(which(!fullmvmt(mref1))) # XXX convergence issues
+      length(which(!fullmvmt(mref1))) # 15 convergence issues
 
        
       # migrant only has to move 50 km2 (to incl short-distance migrants)
       ld50 <- pEst(u.r = 240, u.t = 150, l.d = 50)
       mref2 <- refine(mref1, p.est = ld50)
-      length(which(!fullmvmt(mref2))) # XXX remaining convergence issues
+      length(which(!fullmvmt(mref2))) # 4 remaining convergence issues
 
       
     # identify top model for each individual #
       
       # require 2 months on summer range; require move 5km
-      mtop <- topmvmt(mref1, omit = "mixmig", mrho = 60, mdelta = 25)
+      mtop <- topmvmt(mref2, omit = "mixmig", mrho = 60, mdelta = 25)
       topmods <- data.frame(AnimalID = modindivs, PrelimClassn = names(mtop))
       write.csv(topmods, file = "./rNSDresults/initialclassns.csv", row.names=F)
+      
+      
+      
+    # calculate proportion unclassified points for each individual #
+      
 
-    
-    # summarize and store results
-    rslts <- data.frame(attributes(mtop)) %>%
-      rename(AnimalID = burst, Behav = names) 
-	  summary(rslts)
-	  write.csv(rslts, file = "./rNSDresults/behav-classn-nsd-prelim.csv", row.names = F)
-
-	  
 
 	  
 
