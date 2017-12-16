@@ -993,7 +993,7 @@ tob <- filter(popnlocsall, Herd == "Tobacco Roots") %>%
          ifelse(Month == 6 | Month == 7 | Month == 8, "Summer", "Fall"))))
 unique(tob$Year)
 tobtime <- filter(tob, Month == 2 | Month == 3 | Month == 4 | Month == 5)
-#### get xy points; write to dataframe, to spatial data frame, to stateplane ####
+#### get xy points; write to dataframe, to spatial data frame, to stateplane ###
 xyt <- data.frame("x"=tobtime$Long,"y"=tobtime$Lat)
 spdf.llt <- SpatialPointsDataFrame(xyt, tobtime, proj4string = latlong)
 spdf.spt <- spTransform(spdf.llt,stateplane)
@@ -1015,7 +1015,7 @@ mad <- filter(popnlocsall, Herd == "Madison") %>%
                                 ifelse(Month == 6 | Month == 7 | Month == 8, "Summer", "Fall"))))
 unique(mad$Year)
 madtime <- filter(mad, Month == 2 | Month == 3 | Month == 4 | Month == 5)
-#### get xy points; write to dataframe, to spatial data frame, to stateplane ####
+#### get xy points; write to dataframe, to spatial data frame, to stateplane ###
 xym <- data.frame("x"=madtime$Long,"y"=madtime$Lat)
 spdf.llm <- SpatialPointsDataFrame(xym, madtime, proj4string = latlong)
 spdf.spm <- spTransform(spdf.llm,stateplane)
@@ -1050,7 +1050,7 @@ writeOGR(mydat.sp,
 
 
 #### ok srsly programmatically defining column to create hr from ####
-# because you somehow lost the code, way to do
+# because you somehow lost the code, way to go
 
 # the lame way
 popnhrs <- mcp(spdf.sp[,3], percent = 100) #,3 = Herd
@@ -1167,6 +1167,54 @@ for(i in 2:length(dems)){
   x$filename <- '../zOldAndMisc/test.tif'
   x$overwrite <- TRUE
   m <- do.call(merge, x)
-  
-  
 }
+
+
+
+#### extent issue estimating indiv winhrs ####
+
+test.indivhrswin.kde <- kernelUD(spdf.sp[,"AnimalID"], 
+                                 h = "href", extent = 2)
+test.kdes <- getverticeshr(test.indivhrswin.kde, percent = 95)
+plot(test.kdes)
+# dur, why did that take you so long?
+
+
+
+
+
+####  determining whether NSapph AnimalIDs duplicate other existing Statewide AnimalIDs ####
+# because AnimalIDs in statewide db are different from AnimalIDs in NSapph database
+
+
+# i want to know whether nsapph animalids are duplicated with other herds
+# so i should separate out other herds and separate out sapph and compare
+
+nsapph <- filter(rawlocs, Herd == "Sapphire") # nsapph-based animalids
+others <- filter(rawcap, Herd != "Sapphire") # statewide-based animalids
+
+sapphindivs <- data.frame(AnimalID = unique(nsapph$AnimalID))
+otherindivs <- data.frame(AnimalID = unique(others$AnimalID))
+dupes <- intersect(sapphindivs, otherindivs)
+dupes # sweet, no duplicates
+diffs <- setdiff(sapphindivs, otherindivs) # sanity check, should be 74 nsapph indivs only
+
+# double-check you didn't eff up your manual edit of the database
+# which you did to make nsapph animalIDs match statewide animalIDs
+
+a <- data.frame(AnimalID = unique(rawcap$AnimalID)) # these were statewide animalids
+b <- data.frame(AnimalID = unique(rawlocs$AnimalID)) # these were nsapph animalids
+samesies <- intersect(a, b) 
+
+
+
+####  figuring out why dates are wrong for 51030 (at least) in arcmap ####
+# bc they're correct in the database
+
+locs <- read.csv("locs-allcows.csv")
+huh <- filter(locs, AnimalID == "51030")
+huh$Date <- as.Date(huh$Date)
+summary(huh$Date)
+# keep working on this
+# she's not an elk of interest
+# dates are correct here but wrong in arcmap
