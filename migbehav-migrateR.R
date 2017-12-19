@@ -47,7 +47,7 @@
   #   
   # # until i get the models figured out...
   # # load this and skip to |MODELS|
-  # load("nsd-baselocs.RData")
+   load("nsd-baselocs.RData")
   
   
   
@@ -178,6 +178,38 @@
         ilt <- as.ltraj(xy = ilocs[,c("X", "Y")], date = ilocs$Date, id = ilocs$AnimalID)
         
         # try the model and store error message if any
+        tryCatch(mvmtClass(ilt, p.est = uk64, rloc = rlocs[i,"rloc"]), error = function(e) {
+                errors[i,"Err"] <<- conditionMessage(e)
+                NULL
+            })
+      }
+
+      # identify individuals who had errors
+      errorindivs <- errors %>%
+        filter(!is.na(Err)) %>%
+        left_join(rlocs, by = c("AnimalID" = "burst"))
+      
+      # change their rloc to the immediately preceding date 
+      rlocs$newrloc <- ifelse(rlocs$burst == errorindivs[1,1] | rlocs$burst == errorindivs[2,1] | 
+                                 rlocs$burst == errorindivs[3,1], rlocs$rloc-1, rlocs$rloc)
+      
+      
+      
+      ## check whether new rloc fixes errors ##
+      
+      # create dataframe to store error messages in
+      errors <- data.frame(AnimalID = unique(modlocs$AnimalID), Err = NA)
+      
+      # for each individual
+      for(i in 1:nrow(rlocs)) {
+        
+        # subset its locations
+        ilocs <- droplevels(semi_join(modlocs, rlocs[i,], by = c("AnimalID" = "burst")))
+        
+        # make it ltraj
+        ilt <- as.ltraj(xy = ilocs[,c("X", "Y")], date = ilocs$Date, id = ilocs$AnimalID)
+        
+        # try the model and store error message if any
         tryCatch(mvmtClass(ilt, p.est = uk64, rloc = rlocs[i,"newrloc"]), error = function(e) {
                 errors[i,"Err"] <<- conditionMessage(e)
                 NULL
@@ -189,11 +221,7 @@
         filter(!is.na(Err)) %>%
         left_join(rlocs, by = c("AnimalID" = "burst"))
       
-      # change their rloc to the immediately preceding date and rerun above to verify fixed
-      rlocs$newrloc <- ifelse(rlocs$burst == errorindivs[1,1] | rlocs$burst == errorindivs[2,1] | 
-                                 rlocs$burst == errorindivs[3,1], rlocs$rloc-1, rlocs$rloc)
-
-
+      nrow(errorindivs) # 0 = :)
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
@@ -201,13 +229,10 @@
 ### ### ### ### ### ###
 ####    |MODELS|   ####
 ### ### ### ### ### ###     
- 
-  
 
-  
-  
+       
     
-    # define initial parameter constraints based on biological definition of migration
+    # define initial parameter constraints 
       
       # expand default duration on summer range to allow up to 8 months (default was 84 days), and
       # restrict timing so movement after summer doesn't count as migration (default was any time)
@@ -216,7 +241,7 @@
     
     # define base model, rNSD with expanded duration parameter and restricted timing
       
-      mbase <- mvmtClass(lt, rloc = rlocs$newrloc, p.est = timing)
+      mbase <- mvmtClass(lt, rloc = rlocs$rloc, p.est = timing)
       length(which(!fullmvmt(mbase))) # 35 convergence issues
     
     
@@ -227,7 +252,7 @@
       mref1 <- refine(mbase, p.est = uk64)
       length(which(!fullmvmt(mref1))) # 15 convergence issues
 
-       
+
       # migrant only has to move 50 km2 (to incl short-distance migrants)
       ld50 <- pEst(u.r = 240, u.t = 150, l.d = 50)
       mref2 <- refine(mref1, p.est = ld50)
@@ -236,14 +261,13 @@
       
     # identify top model for each individual #
       
-      # require 2 months on summer range; require move 5km
-      mtop <- topmvmt(mref2, omit = "mixmig", mrho = 60, mdelta = 25)
-      topmods <- data.frame(AnimalID = modindivs, PrelimClassn = names(mtop))
-      write.csv(topmods, file = "./rNSDresults/initialclassns.csv", row.names=F)
+      # require 2 months on summer range; require move 8.66km; don't consider mixmig or nomad (see notes)
+      mtop3 <- topmvmt(mref2, omit = c("mixmig", "nomad"), mdelta = 75)
+      topmods3 <- data.frame(AnimalID = modindivs, PrelimClassn = names(mtop3))
+      write.csv(topmods, file = "./rNSDresults/test6-manualparamposthoc/initialclassns.csv", row.names=F)
       
       
-      
-    # calculate proportion unclassified points for each individual #
+
       
 
 
