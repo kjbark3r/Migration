@@ -119,7 +119,7 @@
     # only incl indivs with locs spanning entire yr (thru dec)
     group_by(AnimalID, Year) %>%
     # month>8 accts for e/w fork captures starting in nov
-    filter(max(Month == 12) & dplyr::n_distinct(Month > 8)) %>%
+    filter(n_distinct(Month) > 8) %>%
     ungroup() %>%
     # count number indivs per herd per yr
     group_by(Herd, Year) %>%
