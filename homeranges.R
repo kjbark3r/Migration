@@ -54,9 +54,9 @@
     allindivs <-  data.frame(AnimalID = unique(allcowlocs$AnimalID))
     
     # Females to use in actual model
-    locs <- read.csv("locs.csv") %>%
-      within(Year <- as.numeric(Year))
-    modindivs <- data.frame(AnimalID = unique(locs$AnimalID))
+    modindivs <- read.csv("modindivs.csv")
+    locs <- allcowlocs %>%
+      semi_join(modindivs, by = "AnimalID")
   
   
   #### Projections ####
@@ -129,6 +129,8 @@
       filter(Month == 12 | Month == 1 | Month == 2) %>%
       # map december locs to following year's winter
       mutate(Year = ifelse(Month == 12, Year + 1, Year)) %>%
+      # only use locs from season of interest
+      filter(Year == YearOfInterest) %>%
       # only indivs with at least 5 relocs (min required for hr estimation)
       group_by(AnimalID) %>%
       filter(n() > 5) %>%
