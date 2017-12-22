@@ -8,7 +8,8 @@
 
 # This code uses Derek Spitz's migrateR package
 # to classify elk migratory behavior as
-# migratory, resident, or something else based on rNSD
+# migratory, resident, or something else ("other")
+# based on rNSD and parameter constraints
 
 
 
@@ -40,15 +41,9 @@
   
   
     library(migrateR) 
-    source("NSDresults/test_plotmvmt2.R")
+    source("test_plotmvmt2.R")
     library(dplyr) 
-    
-    
-  #   
-  # # until i get the models figured out...
-  # # load this and skip to |MODELS|
-   load("nsd-baselocs.RData")
-  
+
   
   
   #### Projections ####
@@ -77,32 +72,28 @@
   
   #### Subset and format raw data for use in models ####
     
+    
     # identify indivs of interest
     indivs <- rawlocs %>%
-      # create POSIXct DateTime for ltraj object; pull just date (Day) from this
-      mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
-      mutate(Day = as.Date(DateTime)) %>%
       # filter to only locations collected during year of interest
       filter(YrOfLoc == YrOfInterest) %>%
-      # select one location per day
-      group_by(AnimalID, Day) %>%
-      slice(1) %>%
-      ungroup %>%
-      # only include indivs with at least 275 days of locations
+      # only include indivs with at least 9 months of locations
+      distinct(AnimalID, Month) %>%
       group_by(AnimalID) %>%
-      filter(n() > 275) %>%
+      filter(n() > 8) %>%
       dplyr::select(AnimalID) %>%
       distinct()
-    indivs <- droplevels(indivs)
+      
 
-    
     # extract locations for individuals of interest
     modlocs <- rawlocs %>%
-      # only considering individuals of interest
+      # only consider individuals of interest
       semi_join(indivs, by = "AnimalID") %>%
       # create POSIXct DateTime for ltraj object; pull just date (Day) from this
       mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
-      mutate(Day = as.Date(DateTime)) %>%
+      mutate(Day = as.Date(DateTime))  %>%
+      # remove daylight savings NAs
+      filter(!is.na(Date)) %>%
       # identify time of day
       mutate(Hour = as.numeric(substr(Time, 0, 2))) %>%
       mutate(TimeOfDay = ifelse(Hour >= 8 & Hour <= 20, "Day", "Night")) %>%
@@ -117,46 +108,48 @@
       ungroup() %>%
       # only include 1st full yr of data, plus extra month for full return to winter
       filter(Day <= Day1 + 395) %>% 
-      # specify datetime format and remove daylight savings time NAs 
-      mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
-      filter(!is.na(Date))
+      # remove indivs who didn't have opportunity to return to winter range
+      group_by(AnimalID) %>%
+      filter(max(Month) == 12) %>%
+      ungroup() %>%
+      # specify datetime format 
+      mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S"))
    
-    # remove any stored factor levels that above code removed
+    # remove any stored factor levels that above code removed; store indivlist
+    indivs <- droplevels(indivs)
     modlocs <- droplevels(modlocs)
-
-
-    
-  #### Identify indivs ###
-  modindivs <- data.frame(AnimalID = unique(modlocs$AnimalID))
+    write.csv(indivs, "modindivs.csv", row.names = F)
    
   
    
   #### Convert Lat/Longs to UTMs ####
-  modlocs <- as.data.frame(spTransform(SpatialPointsDataFrame(
-                            data.frame("X" = modlocs$Longitude, 
-                                       "Y" = modlocs$Latitude), 
-                            modlocs, proj4string = latlong), utm))
-
-
-    # write.csv(modlocs, "locs.csv", row.names=F)
+      
+    modlocs <- as.data.frame(spTransform(SpatialPointsDataFrame(
+                              data.frame("X" = modlocs$Longitude, 
+                                         "Y" = modlocs$Latitude), 
+                              modlocs, proj4string = latlong), utm))
+    write.csv(modlocs, "modlocs.csv", row.names=F)
 
 
     
   #### Create ltraj object ### 
-  lt <- as.ltraj(xy = modlocs[,c("X", "Y")], 
-                 # note Date must be POSIXct
-                 date = modlocs$Date, 
-                 # specify indiv 
-                 id = modlocs$AnimalID)
+    
+    lt <- as.ltraj(xy = modlocs[,c("X", "Y")], 
+                   # note Date must be POSIXct
+                   date = modlocs$Date, 
+                   # specify indiv 
+                   id = modlocs$AnimalID)
     
   
    #### Identify most parsimonious starting loc for rNSD ####
+    
     rlocs <- findrloc(lt)
 
   
   
-    #### store progress ####
-    save.image(file = "nsd-baselocs.RData")  
+   #### store progress ####
+    
+     save.image(file = "nsd-baselocs.RData")  
   
   
   
@@ -184,14 +177,17 @@
             })
       }
 
+      
       # identify individuals who had errors
       errorindivs <- errors %>%
         filter(!is.na(Err)) %>%
         left_join(rlocs, by = c("AnimalID" = "burst"))
+      nrow(errorindivs)
       
-      # change their rloc to the immediately preceding date 
-      rlocs$newrloc <- ifelse(rlocs$burst == errorindivs[1,1] | rlocs$burst == errorindivs[2,1] | 
-                                 rlocs$burst == errorindivs[3,1], rlocs$rloc-1, rlocs$rloc)
+      
+      
+      # change their rloc  
+      rlocs$newrloc <- ifelse(rlocs$burst == errorindivs[1,1], 21, rlocs$rloc)
       
       
       
@@ -223,6 +219,8 @@
       
       nrow(errorindivs) # 0 = :)
 
+      
+      
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
     
@@ -232,43 +230,39 @@
 
        
     
-    # define initial parameter constraints 
+    ## Define initial parameter constraints ##
       
-      # expand default duration on summer range to allow up to 8 months (default was 84 days), and
-      # restrict timing so movement after summer doesn't count as migration (default was any time)
-      timing <- pEst(u.r = 240, u.t = 150)  
+      # expand default duration on summer range to allow up to 8 months (default was 84 days)
+      timing <- pEst(u.r = 240)  
 
-    
-    # define base model, rNSD with expanded duration parameter and restricted timing
       
-      mbase <- mvmtClass(lt, rloc = rlocs$rloc, p.est = timing)
-      length(which(!fullmvmt(mbase))) # 35 convergence issues
+    
+    ## Define base model, rNSD with expanded duration parameter and updated rloc ##
+      
+      mbase <- mvmtClass(lt, rloc = rlocs$rloc, p.est = timing) # change to $newrloc if fixed errors
+      length(which(!fullmvmt(mbase))) # 40 convergence issues
     
     
-    # refine base model to address convergence issues #
+      
+    ## Refine base model to address convergence issues ##
     
       # allow up to 8km daily displacement within the same resident range
       uk64 <- pEst(u.k = log(64))
       mref1 <- refine(mbase, p.est = uk64)
-      length(which(!fullmvmt(mref1))) # 15 convergence issues
+      length(which(!fullmvmt(mref1))) # 20 convergence issues
 
 
-      # migrant only has to move 50 km2 (to incl short-distance migrants)
-      ld50 <- pEst(u.r = 240, u.t = 150, l.d = 50)
-      mref2 <- refine(mref1, p.est = ld50)
-      length(which(!fullmvmt(mref2))) # 4 remaining convergence issues
-
       
-    # identify top model for each individual #
+    ## Identify top model for each individual ##
       
-      # require 2 months on summer range; require move 8.66km; don't consider mixmig or nomad (see notes)
-      mtop3 <- topmvmt(mref2, omit = c("mixmig", "nomad"), mdelta = 75)
-      topmods3 <- data.frame(AnimalID = modindivs, PrelimClassn = names(mtop3))
-      write.csv(topmods, file = "./rNSDresults/test6-manualparamposthoc/initialclassns.csv", row.names=F)
+      # don't consider mixmig or nomad (see notes)
+      mtop <- topmvmt(mref1, omit = c("mixmig", "nomad"))
+      topmods <- data.frame(AnimalID = indivs, PrelimClassn = names(mtop))
+      write.csv(topmods, file = "./rNSDresults/initialclassns.csv", row.names=F)
       
       
-
-      
+     # quick look at prelim classns 
+     summary(topmods$PrelimClassn)
 
 
 	  
@@ -284,11 +278,11 @@
 	  
 	  #### behavioral classification plots ####
 
-      num.plots <- nrow(modindivs)
+      num.plots <- nrow(indivs)
       my.plots <- vector(num.plots, mode='list')
       
       for(i in 1:num.plots) {
-        plot(mref2[[i]])
+        plot(mref1[[i]])
         my.plots[[i]] <- recordPlot()
       }
       graphics.off()
@@ -301,28 +295,65 @@
       
       
       
-  #### checking location classifications on some indiv plots ####
       
-      i140400 <- which(modindivs$AnimalID == 140400)
-      spatmig(lt[i140400], mref2[i140400])
-      spatmig(lt[i140400], mref2[i140400], mod = "disperser")
-      
-      
-      i140630 <- which(modindivs$AnimalID == 140630)
-      spatmig(lt[i140630], mref2[i140630])
-      spatmig(lt[i140630], mref2[i140630], mod = "disperser")  
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
+    
+    
+### ### ### ### ### ### ###
+####    |PARAMETERS|   ####
+### ### ### ### ### ### ###    
 
       
-      i140710 <- which(modindivs$AnimalID == 140710)
-      spatmig(lt[i140710], mref2[i140710])
-      spatmig(lt[i140710], mref2[i140710], mod = "disperser")  
       
       
-      i140890 <- which(modindivs$AnimalID == 140890)
-      spatmig(lt[i140890], mref2[i140890])
-      spatmig(lt[i140890], mref2[i140890], mod = "disperser")  
+      ## use parameters to correctly classify behavior (after visually inspecting all plots) ##
       
       
+          paramlist <- mvmt2df(mtop)
+    
+          # create blank df to store parameters of top models in
+          params <- data.frame(AnimalID = as.character(), 
+                             Model = as.character(),
+                             delta = as.numeric(),
+                             phi = as.numeric(),
+                             theta = as.numeric(),
+                             rho = as.numeric(),
+                             phi2 = as.numeric(),
+                             kappa = as.numeric())
+          
+          # extract and store parameters of top models
+          for (i in 1:length(paramlist)){
+            # extract data for each model
+            dat <- paramlist[[i]]
+            # map parameters to correct individuals
+            dat$AnimalID <- row.names(dat)
+            # identify model 
+            dat$Model <- paste(names(paramlist)[i])
+            # store all info
+            params <- full_join(params, dat)
+          }
+
+      
+      
+      ## implement rules to reclassify some behaviors based on parameters ##
+      
+          
+          reclass <- params %>%
+            # if "resident" moved >900km2, reclassify as Migrant (these are actually mixed migrants)
+            mutate(Reclass = ifelse(Model == "resident" & delta > 900, "migrant", Model)) %>%
+            # if animal "dispersed" or "migrated" <6.7 km, reclassify as Resident
+            mutate(Reclass = ifelse(Reclass == "disperser" &  delta < 45 | Reclass == "migrant" &  delta < 45, "resident", Reclass)) %>%
+            # if animal "migrated" 6.8-8.7km, reclassify as Other
+            mutate(Reclass = ifelse(Reclass == "migrant" & delta < 75, "other", Reclass)) %>%
+            # similarly, if animal "resided" within 6.8-8.7km, reclassify as Other
+            mutate(Reclass = ifelse(Reclass == "resident" & delta > 45, "other", Reclass)) %>%  
+            # rename dispersers as Other
+            mutate(Reclass = ifelse(Reclass == "disperser", "other", Reclass)) %>%
+            # if animal "dispersed" or "migrated" after summer, reclassify as Other
+            mutate(Reclass = ifelse(!is.na(theta) & theta > 270, "other", Reclass)) 
+
+
+
   
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
@@ -331,138 +362,48 @@
 ####    |SUMMARIES|   ####
 ### ### ### ### ### ### ##
 	  
-	  
-	  indivpops <- modlocs %>%
-	    select(AnimalID, Herd) %>%
-	    distinct()
-	  
-	  behav <- left_join(rslts, indivpops, by = "AnimalID") %>%
-	    rename(BehavNSD = Behav) %>%
-	    dplyr::select(Herd, AnimalID, BehavNSD)
-	  write.csv(behav, "behav-nsd.csv", row.names=F)
-	  
-	  popbehav <- behav %>%
-	    group_by(Herd) %>%
-	    summarise(nIndivs = n(),
-	              nMig = length(which(Behav == "migrant")),
-	              nRes = length(which(Behav == "resident")),
-	              nDisp = length(which(Behav == "disperser")),
-	              nNom = length(which(Behav == "nomad")),
-	              nOther = nDisp + nNom)
-	  
-	  popbehavsum <- popbehav %>%
-	    mutate(ppnMig = round(nMig/nIndivs, digits = 2),
-	           ppnRes = round(nRes/nIndivs, digits =2),
-	           ppnOther = round(nOther/nIndivs, digits = 2)) %>%
-	    dplyr::select(Herd, ppnMig, ppnRes, ppnOther, nIndivs)
-    
-    
-    
-    
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
-    
-    
-### ### ### ### ### ### ###
-####    |PARAMETERS|   ####
-### ### ### ### ### ### ###    
-
-    
-	  # extract parameters from all models
-    paramsall <- mvmt2df(mot2)
-    paramsall
-    
-    # dispersers
-    paramsdisp <- paramsall[[1]] 
-    paramsdisp$AnimalID <- rownames(paramsdisp)
-    
-    # migrants
-    paramsmig <- paramsall[[2]]
-    paramsmig$AnimalID <- rownames(paramsmig)
-    
-    # nomads
-    paramsnom <- paramsall[[3]]
-    paramsnom$AnimalID <- rownames(paramsnom)
-    
-    # residents
-    paramsres <- paramsall[[4]]
-    paramsres$AnimalID <- rownames(paramsres)
-
-	  
-	  #### * IN PROGRESS * ####
-	  # goal: identify migration timing per popn
-	  # (to help define timeframe for winhr est'n)
-	  
-	  # only use migrant and disperser models
-	  # for each indiv, figure out their unique start date
-	  # add theta to the start date
-	  # add herd information (join)
-	  # for each herd, identify min startdate and average startdata
-
-    
-    
-##### ADD THIS CODE AFTER YOU RUN THE RLOCS #####
-
-## make sure rlocs start date doesn't occur after migration might have started ##
-
-
-    # disperser parameters
-    paramsdisp <- mvmt2df(mot2)[[1]] 
-    paramsdisp$AnimalID <- rownames(paramsdisp)
-    paramsdisp$Behav <- "disperser"
-  	thetasdisp <- dplyr::select(paramsdisp, c(AnimalID, Behav, theta))
-    
-    # migrant parameters
-    paramsmig <- mvmt2df(mot2)[[2]]
-    paramsmig$AnimalID <- rownames(paramsmig)
-    paramsmig$Behav <- "migrant"
-  	thetasmig <- dplyr::select(paramsmig, c(AnimalID, Behav, theta))
-	
-	# movement date per indiv
-	thetasindivs <- rbind(thetasdisp, thetasmig) %>%
-		left_join(modlocs, by = "AnimalID") %>%
-		dplyr::select(Herd, AnimalID, Behav, Day1, theta) %>%
-		mutate(MvmtStart = as.Date(Day1 + as.integer(theta)),
-		       DayDiff = as.integer(MvmtStart - Day1)) %>%
-	  distinct()
-	          # hahaha duh you could've just used the theta value...
-	
-	# movement date per herd
-	thetaspopns <- thetasindivs %>%
-	group_by(Herd, Behav) %>%
-	summarise(Day1 = min(Day1),
-	          MinStdt = min(MvmtStart),
-		    	  AvgStdt = mean(MvmtStart))
-		
-    
-	
-	# create df of AnimalID, Herd, MinMigStart, AvgMigStart
-	migstart <- indivpops %>% # you make this is the summary section
-		left_join(thetaspopns, by = "Herd")
-
-	
-	
-	
-stdt <- rlocs %>%
-	# identify start date determined by rlocs (migrateR)
-	mutate(rlocDay = as.Date(substr(location, 1, 10))) %>%
-	# add migration/movement start date info 
-	left_join(migstart, by = "Herd") %>%
-	# if rloc identified a day after movement had started, 
-	# just change it back to using the first location
-	# and make a column identifying elk you changed (make sure double-check them visually)
-	mutate(fixedRloc = ifelse(rlocDay < MinStdt, rloc, 1),
-		   changeRloc = ifelse(fixedRloc != rloc, 1, 0))
-	    
+         
+        ## add herd info, rename columns to avoid future confusion, and store ##
+          
+          
+          # herd per indiv
+          indivherds <- modlocs %>%
+            dplyr::select(AnimalID, Herd) %>%
+            distinct() 
+          
+          
+          # add herd info to classification info
+          behav <- reclass %>%
+            left_join(indivherds, by = "AnimalID") %>%
+            rename(Behav = Reclass, ParamMod = Model) %>%
+            dplyr::select(c(AnimalID, Herd, Behav, delta, phi, theta, rho, phi2, kappa, ParamMod)) %>%
+            arrange(AnimalID)
+          write.csv(behav, "mig-behav.csv", row.names = F)
+          
+          
+          # summarize behaviors by herd
+          popbehav <- behav %>%
+      	    group_by(Herd) %>%
+      	    summarise(nIndivs = n(),
+      	              nMig = length(which(Behav == "migrant")),
+      	              nRes = length(which(Behav == "resident")),
+      	              nOth = length(which(Behav == "other"))) %>%
+      	    mutate(ppnMig = round(nMig/nIndivs, digits = 2),
+      	           ppnRes = round(nRes/nIndivs, digits =2),
+      	           ppnOth = round(nOth/nIndivs, digits = 2)) %>%
+      	    dplyr::select(Herd, ppnMig, ppnRes, ppnOth, nIndivs)
+          write.csv(popbehav, "behav-per-popn.csv", row.names=F)
+          
+          
+          # store everything
+          save.image(file = "rNSD.RData")
 	  
 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
+	  
+
+	  
+
     
     
-### ### ### ### ### ### ### ###
-####    |STORING THINGS|   ####
-### ### ### ### ### ### ### ###
     
-    save.image(file = "nsd-inprogress.RData")
-    save.image(file = "nsd-fullmodel.RData")
-    save(modlocs, lt, rlocs, mb, mr, mot2, rslts,
-         file = "nsd-data.RData")
+    
