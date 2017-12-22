@@ -40,6 +40,7 @@
   #### Packages ####
   
   
+    library(beepr)
     library(migrateR) 
     source("test_plotmvmt2.R")
     library(dplyr) 
@@ -184,7 +185,7 @@
         left_join(rlocs, by = c("AnimalID" = "burst"))
       nrow(errorindivs)
       
-      
+      beep("fanfare")
       
       # change their rloc  
       rlocs$newrloc <- ifelse(rlocs$burst == errorindivs[1,1], 21, rlocs$rloc)
