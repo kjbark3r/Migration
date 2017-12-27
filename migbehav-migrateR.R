@@ -119,7 +119,8 @@
     # remove any stored factor levels that above code removed; store indivlist
     indivs <- droplevels(indivs)
     modlocs <- droplevels(modlocs)
-    write.csv(indivs, "modindivs.csv", row.names = F)
+    modindivs <- data.frame(AnimalID = unique(modlocs$AnimalID))
+    write.csv(modindivs, "modindivs.csv", row.names = F)
    
   
    
@@ -188,7 +189,8 @@
       beep("fanfare")
       
       # change their rloc  
-      rlocs$newrloc <- ifelse(rlocs$burst == errorindivs[1,1], 21, rlocs$rloc)
+      rlocs$newrloc <- ifelse(rlocs$burst == errorindivs[1,1] | rlocs$burst == errorindivs[2,1] , 
+        rlocs$rloc-1, rlocs$rloc)
       
       
       
@@ -218,9 +220,42 @@
         filter(!is.na(Err)) %>%
         left_join(rlocs, by = c("AnimalID" = "burst"))
       
-      nrow(errorindivs) # 0 = :)
+      nrow(errorindivs) # fixed one but not both
+      beep("sword")
 
       
+      # change remaining rloc  
+      rlocs$newrloc <- ifelse(rlocs$burst == errorindivs[1,1], 
+        rlocs$newrloc+3, rlocs$newrloc)
+            
+      ## check whether new rloc fixes errors ##
+      
+      # create dataframe to store error messages in
+      errors <- data.frame(AnimalID = unique(modlocs$AnimalID), Err = NA)
+      
+      # for each individual
+      for(i in 1:nrow(rlocs)) {
+        
+        # subset its locations
+        ilocs <- droplevels(semi_join(modlocs, rlocs[i,], by = c("AnimalID" = "burst")))
+        
+        # make it ltraj
+        ilt <- as.ltraj(xy = ilocs[,c("X", "Y")], date = ilocs$Date, id = ilocs$AnimalID)
+        
+        # try the model and store error message if any
+        tryCatch(mvmtClass(ilt, p.est = uk64, rloc = rlocs[i,"newrloc"]), error = function(e) {
+                errors[i,"Err"] <<- conditionMessage(e)
+                NULL
+            })
+      }
+
+      # identify individuals who had errors
+      errorindivs <- errors %>%
+        filter(!is.na(Err)) %>%
+        left_join(rlocs, by = c("AnimalID" = "burst"))
+      
+      nrow(errorindivs) # 0 = :)
+      beep("sword")
       
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
     
@@ -240,7 +275,7 @@
     
     ## Define base model, rNSD with expanded duration parameter and updated rloc ##
       
-      mbase <- mvmtClass(lt, rloc = rlocs$rloc, p.est = timing) # change to $newrloc if fixed errors
+      mbase <- mvmtClass(lt, rloc = rlocs$newrloc, p.est = timing) 
       length(which(!fullmvmt(mbase))) # 40 convergence issues
     
     
@@ -250,7 +285,7 @@
       # allow up to 8km daily displacement within the same resident range
       uk64 <- pEst(u.k = log(64))
       mref1 <- refine(mbase, p.est = uk64)
-      length(which(!fullmvmt(mref1))) # 20 convergence issues
+      length(which(!fullmvmt(mref1))) # 21 convergence issues
 
 
       
@@ -258,7 +293,7 @@
       
       # don't consider mixmig or nomad (see notes)
       mtop <- topmvmt(mref1, omit = c("mixmig", "nomad"))
-      topmods <- data.frame(AnimalID = indivs, PrelimClassn = names(mtop))
+      topmods <- data.frame(AnimalID = modindivs, PrelimClassn = names(mtop))
       write.csv(topmods, file = "./rNSDresults/initialclassns.csv", row.names=F)
       
       
@@ -279,7 +314,7 @@
 	  
 	  #### behavioral classification plots ####
 
-      num.plots <- nrow(indivs)
+      num.plots <- nrow(modindivs)
       my.plots <- vector(num.plots, mode='list')
       
       for(i in 1:num.plots) {
@@ -394,6 +429,33 @@
       	           ppnOth = round(nOth/nIndivs, digits = 2)) %>%
       	    dplyr::select(Herd, ppnMig, ppnRes, ppnOth, nIndivs)
           write.csv(popbehav, "behav-per-popn.csv", row.names=F)
+          
+          
+          # use migration dates to define winter
+          indivdate <- modlocs %>%
+            distinct(AnimalID, Day1) %>%
+            left_join(reclass, by = "AnimalID") %>%
+            filter(Reclass == "migrant") %>%
+            left_join(rlocs, by = c("AnimalID" = "burst")) %>%
+            mutate(stdt =  Day1+newrloc) %>%
+            mutate(migDate = stdt+theta) %>%
+            mutate(MigDay = substr(migDate, 6, 10)) %>%
+            dplyr::select(AnimalID, stdt, migDate, MigDay) %>%
+            mutate(nDay = migDate-stdt) %>%
+            left_join(indivherds) %>%
+            filter(!is.na(migDate))
+          capyrs <- dplyr::select(popnyrs, -nIndiv)
+          capdat <- read.csv("popn-capdates.csv") %>% 
+            semi_join(capyrs, by = c("Herd", "Year")) 
+          herddate <- indivdate %>%
+            group_by(Herd) %>%
+            summarise(firstDate = min(migDate),
+                      avgDate = mean(migDate)) %>%
+            left_join(capdat) %>%
+            dplyr::select(-nIndiv) %>%
+            mutate(nDay = firstDate - as.Date(LastCapDate))
+
+            
           
           
           # store everything
