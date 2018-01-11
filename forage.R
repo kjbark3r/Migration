@@ -99,16 +99,21 @@
             path = "./NDVIamp",
             pattern = paste0("^", noquote(pop)),
             full.names = TRUE)
-        ampstk <- stack(files.amp)
-        names(ampstk)
-        
+        ampstkprelim <- stack(files.amp)
+
         # read in 6 yrs time-integrated ndvi data (from rasterclip.R)
         files.ti <- list.files(
             path = "./NDVIti",
             pattern = paste0("^", noquote(pop)),
             full.names = TRUE)
-        tistk <- stack(files.ti)
-        names(tistk)
+        tistkprelim <- stack(files.ti)
+
+        # reclassify values of 255 as NA (these represent water)
+        rc <- function(x) { ifelse(x == 255, NA, x) }
+        ampstk <- overlay(ampstkprelim, fun = rc)
+        names(ampstk) <- names(ampstkprelim)
+        tistk <- overlay(tistkprelim, fun = rc)
+        names(tistk) <- names(tistkprelim)
         
         # calculate standard deviation of "forage" data for each pixel
         # of population growing season range
@@ -131,6 +136,8 @@
         left_join(predfor, by = "Pop") %>%
         dplyr::select(-c(nIndiv, Year))
       write.csv(outdat, file = "predfor.csv", row.names = F)
+      
+      beep()
 
     
       
@@ -149,23 +156,29 @@
           # read in individual winter home ranges
           indivhrswin <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/AllWinHRs")
           
+      
           # and population ranges
           popnhrs <- shapefile("../GIS/Shapefiles/Elk/PopnHRs/PopnYrHRs")
     
+          
           # create dataframe of individual, herd, year of interest
           indivdatraw <- read.csv("dens-indiv.csv")
+          
           
           # add popn code (for storing and retrieving popn hrs per indiv)
           indivdat <- indivdatraw %>%
             dplyr::select(-Year) %>%
             left_join(popdat, by = "Herd")
           
+          
           # identify indivs
           indivlist <- unique(indivhrswin@data$id)
           nindiv <- length(indivlist)
           
+          
           # full area of interest for cropping (from homeranges.R and post-hoc ArcMap buffering)
           aoiraw <- readOGR("../GIS/Shapefiles/Elk", layer = 'AreaOfInterest')
+          
           
           # read in ndvi amplitude data (from https://phenology.cr.usgs.gov/get_data_250w.php)
           files.amp <- list.files(
@@ -176,6 +189,7 @@
           names(ampstk)
           ampstk@crs
             
+          
           # read in time-integrated ndvi data  (from https://phenology.cr.usgs.gov/get_data_250w.php)
           files.ti <- list.files(
             path = "../DatabasesEtc/Statewide/NDVIti/",
@@ -184,17 +198,32 @@
           tistk <- stack(files.ti)
           names(tistk)
           
+          
           # crop all ndvi data to area of interest (to speed processing)
           aoi <- spTransform(aoiraw, crs(ampstk)) # match aoi proj to ndvi
-          ampcrop <- crop(ampstk, aoi) # crop (note: makes stacks to bricks
-          ticrop <- crop(tistk, aoi)   ##       which speeds processing)
+          ampcropprelim <- crop(ampstk, aoi) # crop (note: makes stacks to bricks
+          ticropprelim <- crop(tistk, aoi)   ##       which speeds processing)
+          
+          
+          # reclassify values of 255 as NA (these represent water)
+          rc <- function(x) { ifelse(x == 255, NA, x) }
+          ampcrop <- overlay(ampcropprelim, fun = rc)
+          names(ampcrop) <- names(ampcropprelim)
+          ticrop <- overlay(ticropprelim, fun = rc)
+          names(ticrop) <- names(ticropprelim)
+          
+          
+          # store cropped and reclassified ndvi data
+          writeRaster(ampcrop, paste0("../GIS/Shapefiles/NDVI/", names(ampcrop)), 
+            bylayer = TRUE, format = "GTiff", overwrite = TRUE)
+          writeRaster(ticrop, paste0("../GIS/Shapefiles/NDVI/", names(ticrop)), 
+            bylayer = TRUE, format = "GTiff", overwrite = TRUE)          
     
+          
           # make home ranges match ndvi projection
           indivhrswin2 <- spTransform(indivhrswin, crs(ampcrop))
           popnhrs2 <- spTransform(popnhrs, crs(ampcrop))
           
-          beep()
-            
 
           # create data frame to store results in
           deltafor <- data.frame(AnimalID = unique(indivhrswin2@data$id), 
@@ -230,19 +259,19 @@
             ti1crop <- trim(ti)
             
             # calculate maximum "forage" within winter range
-            maxamp <- cellStats(amp1crop, stat = 'max')
-            maxti <- cellStats(ti1crop, stat = 'max')
+            maxampin <- cellStats(amp1crop, stat = 'max')
+            maxtiin <- cellStats(ti1crop, stat = 'max')
             
             # store results
             deltafor[i, "AnimalID"] <- elk
-            deltafor[i, "MaxAmpIn"] <- maxamp
-            deltafor[i, "MaxTiIn"] <- maxti
+            deltafor[i, "MaxAmpIn"] <- maxampin
+            deltafor[i, "MaxTiIn"] <- maxtiin
     
           }
           
           
           write.csv(deltafor, "deltafor-prelim.csv", row.names=F)
-          
+
           
       
       ##### Maximum available "forage" outside each individual's winter range ####
@@ -262,9 +291,12 @@
             amp2 <- subset(ampcrop, paste0("amp", yr))
             ti2 <- subset(ticrop, paste0("ti", yr))
             
+            # match home range projection to ndvi data
+            hr2 <- spTransform(hr, crs(amp2))
+            
             # identify ndvi cells that are within or touching edge of home range
-            amp2cells <- cellFromPolygon(amp2, hr, weights = TRUE)[[1]][, "cell"]
-            ti2cells <- cellFromPolygon(ti2, hr, weights = TRUE)[[1]][, "cell"]
+            amp2cells <- cellFromPolygon(amp2, hr2, weights = TRUE)[[1]][, "cell"]
+            ti2cells <- cellFromPolygon(ti2, hr2, weights = TRUE)[[1]][, "cell"]
             
             # set all other cells to NA
             amp2[][-amp2cells] <- NA
@@ -272,7 +304,7 @@
     
             # remove NA cells
             amp2crop <- trim(amp2)
-            ti2crop <- trim(ti)
+            ti2crop <- trim(ti2)
             
             # store separately for each population
             ampname <- paste0("amp.", popcode)
@@ -286,11 +318,54 @@
           
           ## then calculate max "forage" *exclusive* of each indiv's winter hr ##
     
+              for (i in 1:nindiv) {
+                
+
+                # for each elk, identify individual, herd, and herd code
+                elk <- indivdat[i,"AnimalID"]
+                herd <- indivdat[i, "Herd"]
+                popcode <- indivdat[i, "Pop"]
+                
+                # identify population-range ndvi rasters
+                popamp <- paste0("amp.", popcode)
+                popti <- paste0("ti.", popcode)
+                
+                # pull rasters
+                ampdat <- get(popamp)
+                tidat <- get(popti)
+                
+                # identify indiv hr & match projection to ndvi data
+                hri <- subset(indivhrswin2, id == elk)
+                hri2 <- spTransform(hri, crs(ampdat))
+                
+                # remove indiv hr area from population range area
+                exclamp <- mask(ampdat, hri2, inverse = TRUE)
+                exclti <- mask(tidat, hri2, inverse = TRUE)
+    
+                # calculate maximum "forage" outside winter range
+                maxampout <- cellStats(exclamp, stat = 'max')
+                maxtiout <- cellStats(exclti, stat = 'max')
+                
+                # store results
+                deltafor[i, "MaxAmpOut"] <- maxampout
+                deltafor[i, "MaxTiOut"] <- maxtiout
+          
+                                
+                
+              }
 
           
       
-      
+       ## finally, calculate and store difference between max "forage" inside and outside winter HR ##
+          
+          deltafor$deltaAmp <- deltafor$MaxAmpOut - deltafor$MaxAmpIn
+          deltafor$deltaTi <- deltafor$MaxTiOut - deltafor$MaxTiIn
+          
+          write.csv(deltafor, "deltafor.csv", row.names=F)
+                    
+          beep()
+          
+          save.image(file = "for.RData")
       
 
       
-            beep()
