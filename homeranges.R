@@ -122,7 +122,7 @@
       filter(Month == 12 | Month == 1 | Month == 2) %>%
       # map december locs to following year's winter
       mutate(YrOfLoc = ifelse(Month == 12, Year + 1, Year)) %>%
-      select(-Year) %>%
+      dplyr::select(-Year) %>%
       # only use locs from season of interest
       left_join(popnyrs, by = "Herd") %>%
       #dplyr::select(-nIndiv) %>%

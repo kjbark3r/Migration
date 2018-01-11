@@ -418,7 +418,9 @@
           
           
           # summarize behaviors by herd
+          # without including the 2 indivs we can't estimate winterHR for
           popbehav <- behav %>%
+            filter(AnimalID != "BROOT130031" & AnimalID != "BROOT130079") %>%
       	    group_by(Herd) %>%
       	    summarise(nIndivs = n(),
       	              nMig = length(which(Behav == "migrant")),
