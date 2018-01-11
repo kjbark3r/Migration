@@ -727,4 +727,196 @@ popdat <- popnsyrs %>%
     predfor[i, 3] <- tsd
     
     
+#### checking that extracted values make sense ####
+    
+    # goal: glance at histogram of amp and ti values in ampcropsp and ticropsp
+    
+    summary(ampcropsp@data@values)
+    str(ampcropsp[[1]])
+    str(ampcropsp[[1]]@data)
+    str(ampcropsp[[1]]@data@attributes)
+    attributes(ampcropsp[[1]]@data)    
+    cellStats(ampcropsp, stat = 'max')
+    hist(ampcropsp[[1]]) # duh, quit making things harder than they have to be
 
+    
+#### double-checking i cropped rasters for predfor correctly ####    
+    
+    test <-  raster("./NDVIamp/bla-amp2006.tif")    
+    plot(test) #whaddaya know, i actually did
+    
+    
+    
+#### cut code from calculating deltafor ####  
+    
+     amp2crop2 <- resample(amp2crop, popnampstk, method = "bilinear")
+     # this slightly changes values; trying to avoid resampling
+    
+     extent(amp2crop) <- extent(popnampstk) 
+     extent(ti2crop) <- extent(popntistk)
+     # this just changes what it *says* the extent is, not the actual extent
+     
+         
+          popnampstk <- stack()
+          extent(popnampstk) <- extent(aoi)
+          popntistk <- stack()
+          extent(popntistk) <- extent(aoi)
+          # nixed stacking because don't want to alter values
+          # so i don't want to change resolution
+          
+          
+              
+            # expand extent to include full study area
+            amp2crop2 <- extend(amp2crop, extent(aoi))
+            # don't need to do this bc am interested in just this popn raster, not also indiv one
+          
+            
+            
+#### figure out how to remove intersecting polygon areas ####
+
+# start with one population's amp plot                
+plot(amp.cfk)
+# find a clarks fork indiv - BRUC15031
+testi <- "BRUC15031"
+testihr <- subset(indivhrswin2, id == testi)
+plot(testihr)
+# now overlay the indiv hr on the popnhr and remove the intersecting area
+testirast <- raster(testihr)
+plot(testirast)
+# newp
+testpoly <- rasterToPolygons(amp.cfk)
+plot(testpoly)
+# if do this will need to just create this shape and then use it to reclip the raster
+# bc raster vals appear to be shot
+# would prefer to rasterize the indivhr
+testirast <- rasterize(testihr)
+# newp
+testisp <- SpatialPolygons(testihr@polygons)
+testirast <- rasterize(testisp)
+# newp
+# need reference raster
+testirast <- rasterize(testisp, amp.cfk)
+plot(testirast)
+plot(testisp)
+# newp, must need to add field
+testirast <- rasterize(testisp, amp.cfk, field == 1)
+plot(testirast)
+crs(testihr)
+crs(amp.cfk)
+# oh. oops.
+testi <- spTransform(testihr, crs(amp.cfk))
+testisp <- SpatialPolygons(testi@polygons)
+testirast <- rasterize(testisp, amp.cfk)
+plot(testirast)    
+plot(amp.cfk, add = T)
+
+plot(amp.cfk); plot(testirast, add = T, col = "red")
+
+
+# mexcellent. ok so, so far:
+
+testi <- "BRUC15031"
+testihr <- subset(indivhrswin2, id == testi)
+testi <- spTransform(testihr, crs(amp.cfk))
+testisp <- SpatialPolygons(testi@polygons)
+testirast <- rasterize(testisp, amp.cfk)
+
+# now remove intersecting area
+
+# aw shit, did i not have to make it a raster?
+test <- mask(amp.cfk, mask = testi)
+plot(test)
+# motherfucker
+
+test <- mask(amp.cfk, mask = testi, inverse = TRUE)
+plot(test) 
+# <3
+      
+
+
+#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#
+# ok so heres what you need to do for each indiv
+
+# identify correct popn raster, naming convention "amp." or "ti." then "popncode"
+amp.cfk
+# identify indiv
+testi <- "BRUC15031"
+# subset out indiv hr from all indiv hrs
+testihr <- subset(indivhrswin2, id == testi)
+# match projection to ndvi data
+testi <- spTransform(testihr, crs(amp.cfk))
+# use INVERSE mask to remove indiv hr area
+test <- mask(amp.cfk, mask = testi, inverse = TRUE)
+# calculate and store max value
+
+#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#
+
+      
+#### make this code not suck ####            
+          
+                # now determine max "forage" avail outside each indiv's winter range
+      for (i in 1:nindiv) {
+        
+        # for each elk, identify year of interest, home range, and ndvi rasters
+        elk <- indivdat[i,"AnimalID"]
+        yr <- indivdat[i,"Year"]
+        herd <- indivdat[i, "Herd"]
+        outamp <- subset(popnampstk, id == herd)
+        outti <- subset(popntistk, id == herd)
+        extent(hr) <- extent(outamp, id == elk)
+      #   
+      #   # read in population ndvi data 
+      #   # identify cells that are within or touching edge of home range
+      #   ampcells <- cellFromPolygon(amp, hr, weights = TRUE)[[1]][, "cell"]
+      #   ticells <- cellFromPolygon(ti, hr, weights = TRUE)[[1]][, "cell"]
+      #   
+      #   # set all other cells to NA
+      #   amp[][-ampcells] <- NA
+      #   ti[][-ticells] <- NA
+      #   
+      #   # and set "no data" cells to NA
+      #   amp[amp==255] <- NA
+      #   ti[ti==255] <- NA
+      #   
+      #   # remove NA cells
+      #   ampcrop <- trim(amp)
+      #   ticrop <- trim(ti)
+      #  
+      #   # store results
+        
+      #   
+      # 
+      }
+
+
+#### assessing whether 255 values are legit ####
+
+
+writeRaster(ampcrop, paste0("../GIS/Shapefiles/NDVI/", names(ampcrop)), 
+  bylayer = TRUE, format = "GTiff", overwrite = TRUE)
+writeRaster(ticrop, paste0("../GIS/Shapefiles/NDVI/", names(ticrop)), 
+  bylayer = TRUE, format = "GTiff", overwrite = TRUE)
+
+hist(ampcrop)
+par(mfrow=c(1,1))
+hist(ampcrop[[16]], breaks = 100)
+hist(ticrop[[16]], breaks = 100)
+
+test.a <- data.frame(unique(ampcrop[[16]]))
+test.t <- data.frame(unique(ticrop[[16]]))
+
+testamp <- ampcrop
+testamp[][255] <- NA
+test.a2 <- data.frame(unique(testamp[[16]]))
+
+# baby's first reclassification function
+
+rc <- function(x) { 
+  ifelse(x == 255, NA, x)
+}
+
+# test
+test <- c(3,4,5,6,7,8,255)
+test <- rc(test)
+
+# yeah ok that was not actually difficult

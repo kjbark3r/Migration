@@ -1228,6 +1228,29 @@ convlt <- lt[id = conv$AnimalID]
     
     
     
+  #### checking location classifications on some indiv plots ####
+      
+      i140400 <- which(modindivs$AnimalID == 140400)
+      spatmig(lt[i140400], mref2[i140400])
+      spatmig(lt[i140400], mref2[i140400], mod = "disperser")
+      
+      
+      i140630 <- which(modindivs$AnimalID == 140630)
+      spatmig(lt[i140630], mref2[i140630])
+      spatmig(lt[i140630], mref2[i140630], mod = "disperser")  
+
+      
+      i140710 <- which(modindivs$AnimalID == 140710)
+      spatmig(lt[i140710], mref2[i140710])
+      spatmig(lt[i140710], mref2[i140710], mod = "disperser")  
+      
+      
+      i140890 <- which(modindivs$AnimalID == 140890)
+      spatmig(lt[i140890], mref2[i140890])
+      spatmig(lt[i140890], mref2[i140890], mod = "disperser")  
+      
+          
+    
 #### figuring out missing value or infinity error with u.k = log(64) ####
    
     
@@ -2126,5 +2149,343 @@ convlt <- lt[id = conv$AnimalID]
     test <- pts[21]
     length(which(is.na(test[[1]][[1]])))/lengths(test[[1]])
     
+    
+    
+#### figuring out migrant not chosen as top model despite clear winner ####
+    
+    # much have to do with topmvmt(), but doesn't look like those contrictions should preclude mig from selxn
+    
+    	  #### plots of just indivs where this occurred ####
+    plotcheck <- read.csv("./rNSDresults/test5-topmvmtissue/plotcheckclassns.csv")
+    
+    probs <- plotcheck %>%
+      arrange(AnimalID) %>%
+      mutate(Index = row_number()) %>%
+      filter(Notes =="mig was top")
 
+    # verify index correct
+    plot(mref2[[61]])
+    plot(mref2[[114]])
+    
+
+     ## read in plotcheck classn and map indivs to correct row of orig model ##
+    
+    ## subset plots correctly, remembering i can't be sequential this time (bc mref[[i]])
+    
+      num.plots <- nrow(probs)
+      my.plots <- vector(num.plots, mode='list')
+      
+      for(i in 1:num.plots) {
+        j <- probs[i,"Index"]
+        plot(mref2[[j]])
+        my.plots[[i]] <- recordPlot()
+      }
+      graphics.off()
+      
+      pdf('./rNSDresults/test5-topmvmtissue/migbehav-problem-plots.pdf', onefile = TRUE)
+      for(my.plot in my.plots) {
+        replayPlot(my.plot)
+      }
+      graphics.off()
+      
+      
+## try topmvmt() with shorter time constraint (but need to double-check the jaunters) ##
+      
+      test <- topmvmt(mref2, omit = "mixmig", mrho = 30, mdelta = 25)
+      toptest <- data.frame(AnimalID = modindivs, PrelimClassn = names(test))
+      testcomp <- toptest %>%
+        rename(TestClassn = PrelimClassn) %>%
+        left_join(topmods, by = "AnimalID") %>%
+        mutate(Diff = ifelse(TestClassn == PrelimClassn, "N", "Y"))
+      
+      testdiff <- filter(testcomp, Diff == "Y")
+      
+      # test 1 set mrho = 45, this did not fix all issues and also reclassd some jaunters
+      # ok that still didn't solve anything, new plan - look at jaunters aic diff
+      # and possbly make a rule about if deltaaic > X00 then keep as mig?
+    
+      
+  #### honing in on "unclear" to identify common issues ####
+      
+    unclear <- plotcheck %>%
+      arrange(AnimalID) %>%
+      mutate(Index = row_number()) %>%
+      filter(Behav =="unclear")
+      
+      
+       ## subset plots ##
+    
+      num.plots <- nrow(unclear)
+      my.plots <- vector(num.plots, mode='list')
+      
+      for(i in 1:num.plots) {
+        j <- unclear[i,"Index"]
+        plot(mref2[[j]])
+        my.plots[[i]] <- recordPlot()
+      }
+      graphics.off()
+      
+      pdf('./rNSDresults/test5-topmvmtissue/migbehav-unclear-plots.pdf', onefile = TRUE)
+      for(my.plot in my.plots) {
+        replayPlot(my.plot)
+      }
+      graphics.off()
+      
+      
+      
+   #### looking at new classns with nomads excluded and duration constraint gone ####
+      
+      topcomp <- data.frame(topmods, stringsAsFactors = F)
+      topcomp <- topcomp %>%
+        arrange(AnimalID) %>%
+        mutate(Index = row_number()) %>%
+        rename(NomadsRho = PrelimClassn) %>%
+        mutate(NomadsRho = as.character(NomadsRho)) %>%
+        left_join(topmods2, by = "AnimalID") %>%
+        rename(NoNomadsRho = PrelimClassn) %>%
+        mutate(NoNomadsRho = as.character(NoNomadsRho)) %>%
+        mutate(Diff = ifelse(NomadsRho == NoNomadsRho, "N", "Y")) 
+      
+      classdiffs <- filter(topcomp, Diff == "Y") # 82 diffs in classn (possible good sign, 81 indivs were unclear before)
+      
+      # plots ("reclass")
+      
+          
+      num.plots <- nrow(classdifs)
+      my.plots <- vector(num.plots, mode='list')
+      
+      for(i in 1:num.plots) {
+        j <- classdiffs[i,"Index"]
+        plot(mref2[[j]])
+        my.plots[[i]] <- recordPlot()
+      }
+      graphics.off()
+      
+      pdf('./rNSDresults/test5-topmvmtissue/migbehav-reclass-plots.pdf', onefile = TRUE)
+      for(my.plot in my.plots) {
+        replayPlot(my.plot)
+      }
+      graphics.off()
+      
+      
+    #### looking at new classns with nomads excl, duration constraint gone, now must move 75km ####
+      
+      topcomp2 <- data.frame(topmods2, stringsAsFactors = F)
+      topcomp2 <- topcomp2 %>%
+        arrange(AnimalID) %>%
+        mutate(Index = row_number()) %>%
+        rename(ClassnOld = PrelimClassn) %>%
+        mutate(ClassnOld = as.character(ClassnOld)) %>%
+        left_join(topmods3, by = "AnimalID") %>%
+        rename(ClassnNew = PrelimClassn) %>%
+        mutate(ClassnNew = as.character(ClassnNew)) %>%
+        mutate(Diff = ifelse(ClassnOld == ClassnNew, "N", "Y")) 
+      
+      classdiffs2 <- filter(topcomp2, Diff == "Y") # 51 diffs, yikes, that may have been aggressive
+      
+      # plots ("reclass")
+      
+          
+      num.plots <- nrow(classdiffs2)
+      my.plots <- vector(num.plots, mode='list')
+      
+      for(i in 1:num.plots) {
+        j <- classdiffs2[i,"Index"]
+        plot(mref2[[j]])
+        my.plots[[i]] <- recordPlot()
+      }
+      graphics.off()
+      
+      pdf('./rNSDresults/test5-topmvmtissue/migbehav-reclass2-plots.pdf', onefile = TRUE)
+      for(my.plot in my.plots) {
+        replayPlot(my.plot)
+      }
+      graphics.off()
+      
+      
+  #### storing parameters per individual ####
+      
+      paramlist <- mvmt2df(mtop)
+      
+      str(paramlist)
+      # list of 3 dataframes, one per model type
+      
+      paramlist[[1]]
+      test <- paramlist[[1]] 
+      test$AnimalID <- row.names(test)
+      # dataframe of that model type, params and animalids
+      
+      names(paramlist)[1]
+      length(names(paramlist))
+      
+      params <- data.frame(AnimalID = as.character(), 
+                         Model = as.character(),
+                         delta = as.numeric(),
+                         phi = as.numeric(),
+                         theta = as.numeric(),
+                         rho = as.numeric(),
+                         phi2 = as.numeric(),
+                         kappa = as.numeric())
+      
+      for (i in 1:length(paramlist)){
+        
+        dat <- paramlist[[i]]
+        dat$AnimalID <- row.names(dat)
+        dat$Model <- paste(names(paramlist)[i])
+        
+        params <- full_join(params, dat)
+        
+      }
+
+      
+          
+      
+  #### plots for final investigations ####
+
+  
+      num.plots <- nrow(realdiffs)
+      my.plots <- vector(num.plots, mode='list')
+      
+      for(i in 1:num.plots) {
+        j <- realdiffs[i,"Index"]
+        plot(mref1[[j]])
+        my.plots[[i]] <- recordPlot()
+      }
+      graphics.off()
+
+
+      
+      pdf('./rNSDresults/test6-manualparamposthoc/finalinvestigation-plots.pdf', onefile = TRUE)
+      for(my.plot in my.plots) {
+        replayPlot(my.plot)
+      }
+      graphics.off()
+      
+  
+  #### params by model for quick checks ####
+      
+      paramsres <- filter(params, Model == "resident")
+      paramsdisp <- filter(params, Model == "disperser")
+      paramsmig <- filter(params, Model == "migrant")
+      
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
+    
+    
+### ### ### ### ### ### ### ### ### ### ##
+####    |ITS THE FI-NAL COUNT-DOWN|   ####
+### ### ### ### ### ### ### ### ### ### ##
+ 
+   #### comparing auto-selected mods to visual estimations ####
+          
+          test <- read.csv(".\\rNSDresults\\test6-manualparamposthoc\\plotcheckclassns.csv") %>%
+            left_join(reclass, by = "AnimalID") %>%
+            mutate(Diff = ifelse(Behav == Reclass, 0, 1)) %>%
+            arrange(AnimalID) %>%
+            mutate(Index = row_number())
+          diffs <- filter(test, Diff > 0) %>%
+            dplyr::select(AnimalID, Behav, Reclass, ParamConst, Notes, Model, delta, phi, theta, rho, phi2, kappa, Index)
+          realdiffs <- read.csv(".\\rNSDresults\\test6-manualparamposthoc\\finalinvestigationnotes.csv") %>%
+            dplyr::select(AnimalID, FNOTES) %>%
+            filter(FNOTES != "buy it" & FNOTES != "other now (theta)") %>%
+            left_join(diffs, by = "AnimalID")
+          write.csv(realdiffs, ".\\rNSDresults\\test6-manualparamposthoc\\finalinvestigations.csv", row.names=F)
+    
+         
+                
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
+    
+    
+### ### ### ### ### ### ### ###
+####    |STORING THINGS|   ####
+### ### ### ### ### ### ### ###
+    
+    save.image(file = "nsd-inprogress.RData")
+    save.image(file = "nsd-fullmodel.RData")
+    save(modlocs, lt, rlocs, mb, mr, mot2, rslts,
+         file = "nsd-data.RData")      
+    
+    
+                
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #     
+    
+    
+
+####  the missing west fork elk mystery   ####
+
+    
+    
+    wfk <- rawlocs %>%
+      filter(Herd == "West Fork")
+    wfkelk <- data.frame(AnimalID = unique(wfk$AnimalID))
+    
+      #### Subset and format raw data for use in models ####
+
+    
+
+    
+    length(unique(wfki$AnimalID))
+    
+    wfk11 <- filter(wfk, YrOfLoc == 2011)
+
+    capdat <- read.csv("capdat-allindivs.csv")
+    wfkcap <- filter(capdat, Herd == "West Fork")
+    
+  
+    ### ok lots of collar issues that year; checking whether 2012 or 2013 would be better #
+    
+     wfk12 <- rawlocs %>%
+      filter(Herd == "West Fork") %>%
+      mutate(YrOfInterest = 2012) %>%
+      # create POSIXct DateTime for ltraj object; pull just date (Day) from this
+      mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
+      mutate(Day = as.Date(DateTime)) %>%
+      # filter to only locations collected during year of interest
+      filter(YrOfLoc == YrOfInterest) %>%
+      # select one location per day
+      group_by(AnimalID, Day) %>%
+      slice(1) %>%
+      ungroup() %>%
+      group_by(AnimalID) %>%
+      summarize(nday = n(), FirstDay = first(Day), LastDay = last(Day)) 
+    
+    wfk13 <- wfk %>% 
+      filter(Herd == "West Fork") %>%
+      mutate(YrOfInterest = 2013) %>%
+      # create POSIXct DateTime for ltraj object; pull just date (Day) from this
+      mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
+      mutate(Day = as.Date(DateTime)) %>%
+      # filter to only locations collected during year of interest
+      filter(YrOfLoc == YrOfInterest) %>%
+      # select one location per day
+      group_by(AnimalID, Day) %>%
+      slice(1) %>%
+      ungroup() %>%
+      group_by(AnimalID) %>%
+      summarize(nday = n(), FirstDay = first(Day), LastDay = last(Day)) 
+    
+    # and rechecking 2011 info
+    wfk11 <- rawlocs %>%
+      filter(Herd == "West Fork") %>%
+      mutate(YrOfInterest = 2011) %>%
+      # create POSIXct DateTime for ltraj object; pull just date (Day) from this
+      mutate(Date = as.POSIXct(DateTime, format = "%Y-%m-%d %H:%M:%S")) %>%
+      mutate(Day = as.Date(DateTime)) %>%
+      # filter to only locations collected during year of interest
+      filter(YrOfLoc == YrOfInterest) %>%
+      # select one location per day
+      group_by(AnimalID, Day) %>%
+      slice(1) %>%
+      ungroup() %>%
+      group_by(AnimalID) %>%
+      summarize(nday = n(), FirstDay = first(Day), LastDay = last(Day)) 
+    
+    
+    
+    #### new error issue... ####
+    
+    test <- filter(modlocs, AnimalID == 80430)
     

@@ -1218,3 +1218,36 @@ summary(huh$Date)
 # keep working on this
 # she's not an elk of interest
 # dates are correct here but wrong in arcmap
+
+
+
+#### why 2 WFk indivs dropped from indivwinlocs? ####
+
+# get lost when subset locs to only those during yr of interest
+# but their locs ARE during year of interest
+# and other indivs captured during their same yr don't get dropped
+
+#using the same code but subsetting to just the indivs that have issue for speed/ease
+
+isub <- filter(locs, AnimalID == "BROOT130031" | AnimalID == "BROOT130079")
+unique(isub$AnimalID) # not sure if i'm glad or sad i don't understand why this has to happen
+isub <- droplevels(isub)
+unique(isub$AnimalID) # ok now we're good to roll
+
+str(isub)
+unique(isub$Year)
+# confirns locs are in 2013 and 2014, so that does cover year of interest
+
+# ohhhh i bet it's because their capture was too late to estimate winter HR, duh
+
+#verify
+
+isub %>% 
+  mutate(Date = as.Date(Date)) %>% 
+  group_by(AnimalID) %>% 
+  summarise(Day1 = min(Date))
+# yup, bummer
+# ok so have to remove these 2 from analysis, which makes wfk now have...
+hm <- read.csv("popns-yrs.csv") 
+View(hm)
+# oh 11, that's not as awful as i thought
