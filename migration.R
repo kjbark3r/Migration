@@ -2,7 +2,7 @@
 #  ASSESSING RELATIVE INFLUENCE OF FORAGE, HUMANS, AND    #
 #    INTRINSIC FACTORS ON MIGRATORY BEHAVIOR OF ELK       #
 #                   KRISTIN BARKER                        #
-#                    DECEMBER 2017                         #
+#                 DEC 2017 - FOREVER                      #
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
 
 
@@ -85,7 +85,7 @@
       left_join(popold, by = "Herd") %>%
       distinct() %>%
       arrange(Herd)
-    write.csv(popdat, "pop-summaries.csv", row.names=F)
+    #write.csv(popdat, "pop-summaries.csv", row.names=F)
     
     
   #### DATA SUMMARIES ETC ####
@@ -312,8 +312,30 @@
       ## specifically it "cannot find an appropriate step size"
       ## but it's just a warning not an error so not sure how big an issue
       
+      
+      # use mblogit to look at forage with random effect of herd included
     
-   
+        testdat$Behav <- relevel(testdat$Behav, ref = "resident")
+        testdat$Old <- as.factor(testdat$Old)
+      
+        # looking at all possible forage models for funzies
+        mods.for <- list()
+        modnms <- c("PredAmp", "DeltaAmp", "AllForAmp", "PredTi", "DeltaTi", "AllForTi")
+        mods.for[[1]] <- mblogit(Behav ~ rsPredForAmp, data = testdat, random = ~1|Herd)
+        mods.for[[2]] <- mblogit(Behav ~ rsDeltaAmp, data = testdat, random = ~1|Herd)
+        mods.for[[3]] <- mblogit(Behav ~ rsPredForAmp + rsDeltaAmp, data = testdat, random = ~1|Herd)
+        mods.for[[4]] <- mblogit(Behav ~ rsPredForTi, data = testdat, random = ~1|Herd)
+        mods.for[[5]] <- mblogit(Behav ~ rsDeltaTi, data = testdat, random = ~1|Herd)
+        mods.for[[6]] <- mblogit(Behav ~ rsPredForTi + rsDeltaTi, data = testdat, random = ~1|Herd)
+        
+        mods.for[[1]]$deviance
+        mods.for[[2]]$deviance
+        mods.for[[3]]$deviance
+        mods.for[[4]]$deviance
+        mods.for[[5]]$deviance
+        mods.for[[6]]$deviance
+
+   ## mclogit help says it can only support random intercept, not random slope
 
       
   #### other section ####  
