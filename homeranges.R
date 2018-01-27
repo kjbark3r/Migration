@@ -20,6 +20,7 @@
     library(rgeos) # buffer
     library(adehabitatHR) # home ranges and kernel centroids
     library(rgdal) # latlong/stateplane conversions
+    library(raster) # shapefile()
     library(gsubfn) # no idea, possibly unnecessary
     library(maptools) # writeSpatialShape
     library(dplyr) # joins, data work, general awesomeness
@@ -57,8 +58,8 @@
     modindivs <- read.csv("modindivs.csv")
     locs <- allcowlocs %>%
       semi_join(modindivs, by = "AnimalID")
-  
-  
+    
+    
   #### Projections ####
   
     latlong <- CRS("+init=epsg:4326")
@@ -118,8 +119,13 @@
     
     # winter locations (to create individual winter home ranges)
     indivlocswin <- locs %>%
-      # only locns collected during winter (dec-feb, note captures didn't start until jan)
-      filter(Month == 12 | Month == 1 | Month == 2) %>%
+      # only consider locns collected during winter
+      mutate(Date = as.Date(Date)) %>%
+      # for indivs that migrated early, only consider locs occurring prior to movement
+      filter(ifelse(AnimalID == "PM120080" | AnimalID == "PM120023", Month == 12 | Month == 1,
+      ifelse(AnimalID == "NA14035", Date < "2015-02-15", 
+      # for all other indivs, winter = dec-feb
+      Month == 12 | Month == 1 | Month == 2))) %>%
       # map december locs to following year's winter
       mutate(YrOfLoc = ifelse(Month == 12, Year + 1, Year)) %>%
       dplyr::select(-Year) %>%
@@ -135,6 +141,7 @@
       # remove stored data about filtered out indivs (too few locs)
       mutate(AnimalID = factor(AnimalID),
              Herd = factor(Herd))
+      #store 
       write.csv(indivlocswin, "indivlocswin.csv", row.names=F)
     
 
@@ -363,6 +370,11 @@
     oth <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/AllWinHRs")
     indivhrswin <- union(sap, oth) 
     plot(indivhrswin)
+    
+    # add herd and year of interest before storing
+    indivdat <- read.csv("dens-indiv.csv") %>% select(-Dens)
+    indivhrswin@data <- left_join(indivhrswin@data, indivdat, 
+       by = c("id" = "AnimalID"))
     writeOGR(indivhrswin, 
        dsn = "../GIS/Shapefiles/Elk/IndivHRs", 
        layer = "AllWinHRs", 
