@@ -104,10 +104,10 @@
          cadi <- shapefile(cadname)
          
          # transform home range spdf to match cadastral projection
-         # hrs.crs <- spTransform(hrs, crs(cadi)) # you already ran this once
+         hrs.crs <- spTransform(hrs, crs(cadi)) # i'm sure there's a better way...
          
          # clip cadastral to home ranges
-         clip <- raster::intersect(cadi, hrs.crs) # this crashed r last time
+         clip <- raster::intersect(cadi, hrs.crs) 
          
          # store
          assign(outname, clip)
@@ -124,63 +124,120 @@
        #beep("sword")
        #save.image(file = "ownership.RData")
 
+   
+       
+   #### After this I used arcmap to:
+
+    # hand-digitize relevant areas missing from wyoming
+      # join wyoming data to each shapefile
+        # [saved with "wy" appended to file name]
+    # merge indivwinHRs in each popn [to speed processing and
+      # to avoid wasting time on land use classns outside HRs]
+       
+              
+       # clean up objects that are no longer needed since arcmap work
+       rm(list = ls()[grep("cad", ls())], i, clip, outname)
+       
+     
        
        
-       
+         
 ### ### ### ### ### ### ### ### ### #
 ####  |MERGING OWNERSHIP TYPES|  ####
-### ### ### ### ### ### ### ### ### #         
-        
-  # cleanup in attempt to free some memory
-       rm(cadi, cadname, cadyr, clip, outname, i, files.cad)
-       # yeah that did nothing
+### ### ### ### ### ### ### ### ### #
        
-       colnames(cad08mt@data)
-       colnames(cad09mt@data)
-       colnames(cad10mt@data)
-       colnames(cad11mt@data)
-       colnames(cad12mt@data) # gendescrip dies here
-       colnames(cad08mt@data)
-       colnames(cad08mt@data)
-       colnames(cad08mt@data)
-       
-       
-       # identify all unique OwnerNames starting in 2012
-       # ultimately reassign all other than matching what 08-10 GENDESCRIP has to pvt
-       
-       descrip <- list(unique(cad08mt@data$GENDESCRIP))
-       descrip
-       
-       c12 <- data.frame(Nms = unique(cad12mt@data$OwnerName))
-       c08dat <- cad08mt@data
-       
-       # check out property types for classification
-       write.csv(unique(cad08mt@data$PROPTYPE), "./zOldAndMisc/proptypes1.csv", row.names=F)
-       write.csv(unique(cad16mt@data$PropType), "./zOldAndMisc/proptypes2.csv", row.names=F)
-       
-       # create df of just GENDESCRIP, OWNR_NAM1
-       descrips <- cad11mt@data %>%
-         dplyr::select(GENDESCRIP, OWNR_NAM1) %>%
-         rename(OwnerName = OWNR_NAM1) %>%
-         distinct()
-
-       
-       # join to 2012 data and see what's still missing
-       test12 <- left_join(cad12mt@data, descrips, by = "OwnerName")
-       nas <- filter(test12, is.na(GENDESCRIP)) %>%
-         dplyr::select(OwnerName, GENDESCRIP) %>%
-         distinct()
-       ## see data prep notes for list of things to grep and fix, others are pvt or NA
-    
  
        
+      #### Standardize column names ####
        
-### ### ### ### ### ### ### ### #
-####  |OWNERSHIP PER INDIV|  ####
-### ### ### ### ### ### ### ### # 
        
-       # read in winter hr of each individual
-       indivhrs <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/AllWinHRs")
+        ## identify and prep files ##
        
-       # index these by @data$id (=AnimalID)
+          # identify cropped land ownership files to use
+          cadlist <- list.files(path = "../GIS/Shapefiles/Land",
+            pattern = "popcad.+shp$",full.names = TRUE)
        
+           # read in and store each file (naming convention = "cad"+yr)
+           for (i in 1:length(cadlist)) {
+             inname <- cadlist[i]
+             outname <- substr(inname, nchar(inname)-8, nchar(inname)-4)
+             assign(outname, shapefile(inname))
+           }
+    
+         
+       
+       ## standardize column names across files ##
+           
+           # for pre-2012 cadastrals
+           oldcadlista <- c("cad08", "cad10", "cad11")
+           for (i in 1:length(oldcadlista)) {
+            cadi <- get(oldcadlista[i]) 
+            dati <- data.frame(
+              myClassn = NA,
+              owner = cadi@data$OWNR_NAM1,
+              descr = cadi@data$GENDESCRIP,
+              propType = cadi@data$PROPTYPE,
+              grazAcre = cadi@data$GRAZING_AC,
+              irrigAcre = cadi@data$IRRIG_ACRE,
+              hayAcre = cadi@data$WILD_HAY_A)
+            cadi@data = dati
+            assign(paste0(oldcadlista[i], "upd"), cadi)
+           }
+           
+           # for 2012 and later cadastrals
+           oldcadlistb <- c("cad12", "cad13", "cad14", "cad16")
+           for (i in 1:length(oldcadlistb)) {
+            cadi <- get(oldcadlistb[i]) 
+            dati <- data.frame(
+              myClassn = NA,
+              owner = cadi@data$OwnerName,
+              descr = NA,
+              propType = cadi@data$PROPTYPE,
+              grazAcre = cadi@data$GrazingAcr,
+              irrigAcre = cadi@data$IrrigatedA,
+              hayAcre = cadi@data$WildHayAcr)
+            cadi@data = dati
+            assign(paste0(oldcadlistb[i], "upd"), cadi)
+           }
+
+
+        
+           
+           
+           
+    #### Classify AGR and obvious DEV land ####
+        
+        # using the files with standardized column names
+        for (i in 1:length(cadlist)) {
+          
+          # identify the file
+          cadi <- get(cadlist[i])
+          
+          # and the year (to name output file at end)
+          yr <- substr(cadlist[i], 4, 5)
+          
+          # update land use classification per parcel as follows:
+          cadi@data <- mutate(cadi@data,
+            # if any grazing, irrigated, or wild hay acreage, class "agricultural"
+            myClassn = ifelse(grazAcre > 0 | irrigAcre > 0 | hayAcre > 0, "AGR", 
+             # exempt properties, mining claims, and NAs require manual classn
+             ifelse(grepl("exempt", propType), "UNK",
+               # so call them "unknown" for now
+               ifelse(grepl("mining", propType), "UNK",
+                 # all property types other than the above are "developed"
+                 ifelse(is.na(propType), "UNK", "DEV")))))
+          
+          # store as r object
+          assign(paste0("lu", yr), cadi)
+          
+          # and export to arcmap to check out the unknowns
+          writeOGR(cadi, dsn = "../GIS/Shapefiles/Land",
+            layer = paste0("lu", yr),
+            driver = "ESRI Shapefile",
+            overwrite_layer = TRUE)      
+       }
+
+        
+           
+           
+           
