@@ -120,7 +120,7 @@
     indivs <- droplevels(indivs)
     modlocs <- droplevels(modlocs)
     modindivs <- data.frame(AnimalID = unique(modlocs$AnimalID))
-    write.csv(modindivs, "modindivs.csv", row.names = F)
+    write.csv(modindivs, "behavindivs.csv", row.names = F)
    
   
    
