@@ -20,7 +20,7 @@
     library(sp) # spatial
     library(rgdal) # projections; working with shps
     library(maptools) # writeSpatialShape
-    library(beepr) # alarm when code finishes
+    library(beepr) # exciting alarm when code finishes
     library(dplyr) # joins, data work, general awesomeness
     
     
@@ -230,7 +230,7 @@
                           MaxAmpIn = NA, MaxAmpOut = NA,
                           MaxTiIn = NA, MaxTiOut = NA)
 
-      
+
           
       ##### Maximum available "forage" within each individual's winter range ####
           
@@ -314,7 +314,7 @@
             assign(tiname, ti2crop)
 
           }
-          
+
           
           ## then calculate max "forage" *exclusive* of each indiv's winter hr ##
     
