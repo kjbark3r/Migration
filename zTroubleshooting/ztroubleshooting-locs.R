@@ -1251,3 +1251,55 @@ isub %>%
 hm <- read.csv("popns-yrs.csv") 
 View(hm)
 # oh 11, that's not as awful as i thought
+
+
+
+
+#### restricting timing of winter for just a few early migrants ####
+test <- locs %>% filter(AnimalID == "NA14035" | AnimalID == "140040")
+test <- droplevels(test)
+
+# fuck it, prob easiest to remove and re-add
+
+test2 <- filter(locs, AnimalID != "NA14035" & AnimalID != "140040") 
+nrow(test2) + nrow(test)
+
+janMig <- filter(locs, AnimalID == "PM120080" | AnimalID == "PM120023")
+febMig <- filter(locs, AnimalID == "NA14035")
+
+# ooh what if i filtered locs first conditional on indiv, duh
+test <- locs %>%
+  mutate(Date = as.Date(Date)) %>%
+  filter(ifelse(AnimalID == "PM120080" | AnimalID == "PM120023", Month == 12 | Month == 1,
+    ifelse(AnimalID == "NA14035", Date < "2015-02-15", 
+      Month == 12 | Month == 1 | Month == 2)))
+
+check <- filter(test, AnimalID == "PM120080")
+# schweet
+
+
+
+#### figuring out why there's suddenly an error in my beautiful deltafor code ####
+
+# errored out on 3rd indiv, 140010, but nothing changed with her
+# verified indivs that should have been deleted were
+# looked in arcmap, nothings weird about her location or size of hr
+# maybe its an ndvi issue??
+# figure out exact line causing error
+
+plot(hr)
+plot(indivhrswin2)
+hrtest <- subset(indivhrswin2, id == 140010)
+plot(hrtest) # wtf, why no hr?
+
+# it does exist in arcmap
+# try another similar indiv
+test2 <- subset(indivhrswin2, id == 140040)
+plot(test2)
+# huh, that one's fine
+
+# ohh nvrmind, works for her, fils on 140060 (one i removed)
+# just need to find where retaining info about removed indivs
+# elk has 312 factor levels, should have 308, dur
+
+
