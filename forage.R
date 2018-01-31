@@ -180,55 +180,42 @@
           aoiraw <- readOGR("../GIS/Shapefiles/Elk", layer = 'AreaOfInterest')
           
           
-          # read in ndvi amplitude data (from https://phenology.cr.usgs.gov/get_data_250w.php)
-          files.amp <- list.files(
-            path = "../DatabasesEtc/Statewide/NDVIamp/",
+          # read in max ndvi data (from https://phenology.cr.usgs.gov/get_data_250w.php)
+          files.maxn <- list.files(
+            path = "../DatabasesEtc/Statewide/NDVImax/",
             pattern = "tif$",
             full.names = TRUE)
-          ampstk <- stack(files.amp)
-          names(ampstk)
-          ampstk@crs
-            
-          
-          # read in time-integrated ndvi data  (from https://phenology.cr.usgs.gov/get_data_250w.php)
-          files.ti <- list.files(
-            path = "../DatabasesEtc/Statewide/NDVIti/",
-            pattern = "tif$",
-            full.names = TRUE)
-          tistk <- stack(files.ti)
-          names(tistk)
-          
+          maxnstk <- stack(files.maxn)
+          names(maxnstk)
+          maxnstk@crs
+
           
           # crop all ndvi data to area of interest (to speed processing)
-          aoi <- spTransform(aoiraw, crs(ampstk)) # match aoi proj to ndvi
-          ampcropprelim <- crop(ampstk, aoi) # crop (note: makes stacks to bricks
-          ticropprelim <- crop(tistk, aoi)   ##       which speeds processing)
+          aoi <- spTransform(aoiraw, crs(maxnstk)) # match aoi proj to ndvi
+          maxncropprelim <- crop(maxnstk, aoi) # crop
+
           
           
           # reclassify values of 255 as NA (these represent water)
           rc <- function(x) { ifelse(x == 255, NA, x) }
-          ampcrop <- overlay(ampcropprelim, fun = rc)
-          names(ampcrop) <- names(ampcropprelim)
-          ticrop <- overlay(ticropprelim, fun = rc)
-          names(ticrop) <- names(ticropprelim)
+          maxncrop <- overlay(maxncropprelim, fun = rc)
+          names(maxncrop) <- names(maxncropprelim)
+
           
           
           # store cropped and reclassified ndvi data
-          writeRaster(ampcrop, paste0("../GIS/Shapefiles/NDVI/", names(ampcrop)), 
+          writeRaster(maxncrop, paste0("../GIS/Shapefiles/NDVI/", names(maxncrop)), 
             bylayer = TRUE, format = "GTiff", overwrite = TRUE)
-          writeRaster(ticrop, paste0("../GIS/Shapefiles/NDVI/", names(ticrop)), 
-            bylayer = TRUE, format = "GTiff", overwrite = TRUE)          
-    
+
           
           # make home ranges match ndvi projection
-          indivhrswin2 <- spTransform(indivhrswin, crs(ampcrop))
-          popnhrs2 <- spTransform(popnhrs, crs(ampcrop))
+          indivhrswin2 <- spTransform(indivhrswin, crs(maxncrop))
+          popnhrs2 <- spTransform(popnhrs, crs(maxncrop))
           
 
           # create data frame to store results in
           deltafor <- data.frame(AnimalID = unique(indivhrswin2@data$id), 
-                          MaxAmpIn = NA, MaxAmpOut = NA,
-                          MaxTiIn = NA, MaxTiOut = NA)
+                          maxNDVIin = NA, maxNDVIout = NA)
 
 
           
@@ -243,32 +230,26 @@
             hr <- subset(indivhrswin2, id == elk)
             
             # read in correct yrs' ndvi data 
-            amp <- subset(ampcrop, paste0("amp", yr))
-            ti <- subset(ticrop, paste0("ti", yr))
-            
+            maxn <- subset(maxncrop, paste0("maxn", yr))
+
             # identify ndvi cells that are within or touching edge of home range
-            ampcells <- cellFromPolygon(amp, hr, weights = TRUE)[[1]][, "cell"]
-            ticells <- cellFromPolygon(ti, hr, weights = TRUE)[[1]][, "cell"]
-            
+            maxncells <- cellFromPolygon(maxn, hr, weights = TRUE)[[1]][, "cell"]
+
             # set all other cells to NA
-            amp[][-ampcells] <- NA
-            ti[][-ticells] <- NA
-    
+            maxn[][-maxncells] <- NA
+
             # remove NA cells
-            amp1crop <- trim(amp)
-            ti1crop <- trim(ti)
-            
+            maxn1crop <- trim(maxn)
+
             # calculate maximum "forage" within winter range
-            maxampin <- cellStats(amp1crop, stat = 'max')
-            maxtiin <- cellStats(ti1crop, stat = 'max')
-            
+            maxnin <- cellStats(maxn1crop, stat = 'max')
+
             # store results
             deltafor[i, "AnimalID"] <- elk
-            deltafor[i, "MaxAmpIn"] <- maxampin
-            deltafor[i, "MaxTiIn"] <- maxtiin
-    
+            deltafor[i, "maxNDVIin"] <- maxnin
+
           }
-          
+
           
           write.csv(deltafor, "deltafor-prelim.csv", row.names=F)
 
@@ -288,30 +269,24 @@
             hr <- subset(popnhrs2, id == herd)
             
             # read in correct yrs' ndvi data 
-            amp2 <- subset(ampcrop, paste0("amp", yr))
-            ti2 <- subset(ticrop, paste0("ti", yr))
-            
+            maxn2 <- subset(maxncrop, paste0("maxn", yr))
+
             # match home range projection to ndvi data
-            hr2 <- spTransform(hr, crs(amp2))
+            hr2 <- spTransform(hr, crs(maxn2))
             
             # identify ndvi cells that are within or touching edge of home range
-            amp2cells <- cellFromPolygon(amp2, hr2, weights = TRUE)[[1]][, "cell"]
-            ti2cells <- cellFromPolygon(ti2, hr2, weights = TRUE)[[1]][, "cell"]
-            
+            maxn2cells <- cellFromPolygon(maxn2, hr2, weights = TRUE)[[1]][, "cell"]
+
             # set all other cells to NA
-            amp2[][-amp2cells] <- NA
-            ti2[][-ti2cells] <- NA
-    
+            maxn2[][-maxn2cells] <- NA
+
             # remove NA cells
-            amp2crop <- trim(amp2)
-            ti2crop <- trim(ti2)
-            
+            maxn2crop <- trim(maxn2)
+
             # store separately for each population
-            ampname <- paste0("amp.", popcode)
-            tiname <- paste0("ti.", popcode)
-            
-            assign(ampname, amp2crop)
-            assign(tiname, ti2crop)
+            maxnname <- paste0("maxn.", popcode)
+
+            assign(maxnname, maxn2crop)
 
           }
 
@@ -327,30 +302,24 @@
                 popcode <- indivdat[i, "Pop"]
                 
                 # identify population-range ndvi rasters
-                popamp <- paste0("amp.", popcode)
-                popti <- paste0("ti.", popcode)
-                
+                popmaxn <- paste0("maxn.", popcode)
+
                 # pull rasters
-                ampdat <- get(popamp)
-                tidat <- get(popti)
-                
+                maxndat <- get(popmaxn)
+
                 # identify indiv hr & match projection to ndvi data
                 hri <- subset(indivhrswin2, id == elk)
-                hri2 <- spTransform(hri, crs(ampdat))
+                hri2 <- spTransform(hri, crs(maxndat))
                 
                 # remove indiv hr area from population range area
-                exclamp <- mask(ampdat, hri2, inverse = TRUE)
-                exclti <- mask(tidat, hri2, inverse = TRUE)
-    
+                exclmaxn <- mask(maxndat, hri2, inverse = TRUE)
+
                 # calculate maximum "forage" outside winter range
-                maxampout <- cellStats(exclamp, stat = 'max')
-                maxtiout <- cellStats(exclti, stat = 'max')
-                
+                maxnout <- cellStats(exclmaxn, stat = 'max')
+
                 # store results
-                deltafor[i, "MaxAmpOut"] <- maxampout
-                deltafor[i, "MaxTiOut"] <- maxtiout
-          
-                                
+                deltafor[i, "maxNDVIout"] <- maxnout
+       
                 
               }
 
@@ -358,9 +327,8 @@
       
        ## finally, calculate and store difference between max "forage" inside and outside winter HR ##
           
-          deltafor$deltaAmp <- deltafor$MaxAmpOut - deltafor$MaxAmpIn
-          deltafor$deltaTi <- deltafor$MaxTiOut - deltafor$MaxTiIn
-          
+          deltafor$deltaNDVI <- deltafor$maxNDVIout - deltafor$maxNDVIin
+
           write.csv(deltafor, "deltafor.csv", row.names=F)
                     
           beep()
