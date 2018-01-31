@@ -121,10 +121,7 @@
 
        }
        
-       #beep("sword")
-       #save.image(file = "ownership.RData")
 
-   
        
    #### After this I used arcmap to:
 
@@ -153,7 +150,7 @@
        
         ## identify and prep files ##
        
-          # identify cropped land ownership files to use
+          # identify cropped land ownership files created in arcmap
           cadlist <- list.files(path = "../GIS/Shapefiles/Land",
             pattern = "popcad.+shp$",full.names = TRUE)
        
@@ -203,11 +200,11 @@
 
         
            
-           
-           
-    #### Classify AGR and obvious DEV land ####
+    #### First classify AGR and obvious DEV land ####
         
-        # using the files with standardized column names
+        # using the files with standardized column names  
+        cadlist <- grep("upd", objects(), value = TRUE)   
+
         for (i in 1:length(cadlist)) {
           
           # identify the file
@@ -217,27 +214,151 @@
           yr <- substr(cadlist[i], 4, 5)
           
           # update land use classification per parcel as follows:
-          cadi@data <- mutate(cadi@data,
-            # if any grazing, irrigated, or wild hay acreage, class "agricultural"
-            myClassn = ifelse(grazAcre > 0 | irrigAcre > 0 | hayAcre > 0, "AGR", 
-             # exempt properties, mining claims, and NAs require manual classn
-             ifelse(grepl("exempt", propType), "UNK",
+          cadi@data <- mutate(cadi@data, myClassn = 
+            # "agricultural" if any acreage of irrigated, or wild hay land (NOT grazing-only land)
+            ifelse(irrigAcre > 0 | hayAcre > 0, "AGR", 
+            # other exempt properties, mining claims, and NAs require manual classification
+            ifelse(grepl("[Ee]xempt", propType), "UNK",
                # so call them "unknown" for now
-               ifelse(grepl("mining", propType), "UNK",
+               ifelse(grepl("[Mm]ining", propType), "UNK",
                  # all property types other than the above are "developed"
-                 ifelse(is.na(propType), "UNK", "DEV")))))
+                 ifelse(is.na(propType), "UNK", "DEV")))))            
+
           
           # store as r object
           assign(paste0("lu", yr), cadi)
-          
-          # and export to arcmap to check out the unknowns
-          writeOGR(cadi, dsn = "../GIS/Shapefiles/Land",
-            layer = paste0("lu", yr),
-            driver = "ESRI Shapefile",
-            overwrite_layer = TRUE)      
+   
        }
 
         
+        
+    #### Then use info from older cadastrals to classify some of the remaining unknowns ####
+        
            
+        # make df of unknown classifications that incls ownership and descrip info from old cadastrals   
+        olddescr <- rbind(data.frame(lu08@data), data.frame(lu10@data), data.frame(lu11@data)) %>%
+              dplyr::select(owner, descr, myClassn) %>%
+              filter(myClassn == "UNK") %>%
+              # remove USA owner bc has multiple possible descrips (can be NPS, BLM, etc)   
+              filter(owner != "UNITED STATES OF AMERICA" & !is.na(owner)) %>%
+              # define correct descrips for USFS and MT Dept of Transportation
+              mutate(descr = ifelse(owner == "USDA FOREST SERVICE", "USFS",
+                ifelse(owner == "MONTANA DEPARTMENT OF TRANSPOR", "MT State", paste(descr)))) %>%
+              # remove duplicate entries
+              distinct() %>%
+              mutate(owner = as.character(owner), descr = as.character(descr))
            
+        
+
+        # make df of just descrs and classns 
+        known <- data.frame(descr = unique(olddescr$descr), myClassn = NA) %>%
+          # classify obvious public and developed lands as such & classify water NA
+          mutate(myClassn = ifelse(descr == "Public" | descr == "USFS" | 
+                                   descr == "BLM" | descr == "NPS", "PUB", 
+                            ifelse(descr == "Private" | descr == "Utl Ease" | 
+                                   descr == "RgtOfWay", "DEV", 
+                            ifelse(descr == "Water", "NA", "UNK"))),
+            descr = as.character(descr)) 
+        
+        
+        # make df of owners and updated classns
+        descrips <- olddescr %>%
+          dplyr::select(-myClassn) %>%
+          left_join(known, by = "descr")
+        
+        # and another of just owners and descrips
+        ownrs <- dplyr::select(olddescr, -myClassn)
+        
+
+        # add descrips to newer cadastrals that didn't have them
+        newcadlist <- c("lu12", "lu13", "lu14", "lu16")
+        for (i in 1:length(newcadlist)) {
+          lui <- get(newcadlist[i])
+          lui@data <- lui@data %>%
+            mutate(owner = as.character(owner)) %>%
+            dplyr::select(-descr) %>%
+            left_join(ownrs, by = "owner")
+          assign(newcadlist[i], lui)
+          
+        
+       }        
            
+      
+      # save.image(file = "landuse.RData")
+       
+          # and export to arcmap to check out remaining unknowns
+        exportlist <- c("lu08", "lu10", "lu11", "lu12", "lu13", "lu14", "lu16")
+        for(i in 1:length(exportlist)) {
+          lui = get(exportlist[i])
+          writeOGR(lui, dsn = "../GIS/Shapefiles/Land",
+            layer = exportlist[i],
+            driver = "ESRI Shapefile",
+            overwrite_layer = TRUE)  
+        }
+        
+        
+      #### KRISTIN YOU LEFT OFF HERE ####
+        # at a complete loss as to why the below code correctly classifies Mining Claims etc
+        # but your for loop below it doesn't. what little silly mistake have you made??
+            # the first ifelse of the loop seems to work fine
+            # but all the ones after that are -i think- broken
+        
+      # getting closer but still at a fucking loss
+        
+        # helpful hints:
+        
+        # there are no NAs in the @data until you run your messed up loop
+        # loop introduces NAs that shouldn't be there (they should be "UNK")
+        # also it seems to work passably on older data but not newer
+        # although you could just be confused about that
+        
+        # i think figure out NAs and you'll be close
+        # see troubleshooting code for other loop options (that also don't really work well)
+          
+        
+        test <- lu13@data %>%
+          mutate(myClassn = ifelse(myClassn != "UNK", myClassn,
+             ifelse(propType == "MC - Mining Claim", "YAY!",
+                          ifelse(descr == "Public" | descr == "USFS" | descr == "BLM" | owner == "BLM" | descr == "NPS", "PUB", 
+            "PENIS"))))
+
+        
+        #### FIX ME KRISTINNNNNNNN ####
+        
+        # add updated classns to all cadastrals
+        lulist <- grep("^lu[[:digit:]]", objects(), value = TRUE)   
+
+        for (i in 1:length(lulist)) {
+          
+          # identify the file
+          lui <- get(lulist[i])
+
+          # update some unknown classifications
+          lui@data <- lui@data %>%
+            # if already classified as ag or dev, don't mess with it
+            mutate(myClassn = ifelse(myClassn != "UNK", myClassn,
+              # classify obvious public as such
+              ifelse(descr == "Public" | descr == "USFS" | 
+                     descr == "BLM" | owner == "BLM" | descr == "NPS", "PUB", 
+              # ditto obvious developed/developable lands   
+              ifelse(descr == "Private" | descr == "Utl Ease" | 
+                     descr == "RgtOfWay" | propType == "MC - Mining Claim", "DEV", 
+              # and classify water as NA  
+              ifelse(descr == "Water", "NA", "UNK")))))
+
+            
+          # store as r object
+          assign(paste0("new", lulist[i]), lui)
+          # 
+          # # and export to arcmap to check out remaining unknowns
+          # writeOGR(lui, dsn = "../GIS/Shapefiles/Land",
+          #   layer = lulist[i],
+          #   driver = "ESRI Shapefile",
+          #   overwrite_layer = TRUE)
+       }        
+           
+
+
+         ## KRISTIN you left off figuring out how to classify
+        # some remaining NAs at the bottom of that preceding for loop
+        # (se nas df) before storing the new shapefiles
