@@ -437,5 +437,70 @@
     
     # m5: animal age
     testm5 <- multinom(Behav ~ Age, data = testdat)
+
     
+    
+    
+    
+       
+### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+  
+#### MODELING, TAKE 2 ####      
+    
+  
+    
+  #### using multinom from nlm package ####
+    
+    
+    # goal 1: rerun older models so you feel like you did something
+          
+        # for actual "competition" only consider full models
+        mods.for2 <- list()
+        modnms2 <- c("Amp", "Ti")
+        mods.for2[[1]] <- multinom(Behav ~ rsPredForAmp + rsDeltaAmp, data = testdat)
+        mods.for2[[2]] <- multinom(Behav ~ rsPredForTi + rsDeltaTi, data = testdat)
+        aictab(cand.set = mods.for2, modnames = modnms2)
+        aicres2 <- data.frame(aictab(cand.set = mods.for2, modnames = modnms2))
+        
+        
+    # goal 2: run a model with an interaction
+          
+        mint <- multinom(Behav ~ rsPredForTi + rsDeltaTi + Old + rsDeltaTi*Old, data = testdat)
+        
+        # and compete with the previous models
+        mstest <- list(); msnms <- c("ageintrxn", "noage")
+        mstest[[1]] <- mint; mstest[[2]] <- mods.for2[[2]]
+        aictab(cand.set = mstest, modnames = msnms)
+        
+        
+    # goal 3: run a model with a random effect
+          
+        mint <- multinom(Behav ~ rsPredForTi + rsDeltaTi, data = testdat)    
+        
+        
+        
+  #### try ordinal rather than nominal (ordinal package) ####   
+        
+    testdat <- dat
+    testdat$behavN <- relevel(testdat$Behav, ref = "resident")
+    testdat$behavO <- factor(testdat$Behav, levels = c("resident", "intermediate", "migrant"))
+
+    # rescale ndvi data to make them comparable
+    testdat$rsPredForAmp <- scale(testdat$PredForAmp, center = TRUE, scale = TRUE)
+    testdat$rsDeltaAmp <- scale(testdat$deltaAmp, center = TRUE, scale = TRUE)
+    testdat$rsPredForTi <- scale(testdat$PredForTi, center = TRUE, scale = TRUE)
+    testdat$rsDeltaTi <- scale(testdat$deltaTi, center = TRUE, scale = TRUE)
+
+    # load new libary    
+    library(ordinal) # overwrites dplyr's 'slice'
+
+    # goal 1: make one simple model work
+    ord <- clm(behavO ~ rsPredForTi + rsDeltaTi, data = testdat)
+    ord
+    summary(ord)
+        
+    # compare to nominal model    
+    
+    nom <- multinom(behavN ~ rsPredForTi + rsDeltaTi, data = testdat)
+    summary(nom)
     
