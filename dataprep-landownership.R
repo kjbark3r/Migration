@@ -215,14 +215,14 @@
           
           # update land use classification per parcel as follows:
           cadi@data <- mutate(cadi@data, myClassn = 
-            # "agricultural" if any acreage of irrigated, or wild hay land (NOT grazing-only land)
-            ifelse(irrigAcre > 0 | hayAcre > 0, "AGR", 
+            # "agricultural" if any acreage of irrigated
+            ifelse(irrigAcre > 0, "AGR", 
             # other exempt properties, mining claims, and NAs require manual classification
             ifelse(grepl("[Ee]xempt", propType), "UNK",
                # so call them "unknown" for now
                ifelse(grepl("[Mm]ining", propType), "UNK",
                  # all property types other than the above are "developed"
-                 ifelse(is.na(propType), "UNK", "DEV")))))            
+                 ifelse(is.na(propType), "UNK", "DEV")))))    
 
           
           # store as r object
@@ -262,9 +262,11 @@
         
         
         # make df of owners and updated classns
-        descrips <- olddescr %>%
+        classns <- olddescr %>%
           dplyr::select(-myClassn) %>%
-          left_join(known, by = "descr")
+          left_join(known, by = "descr") %>%
+          rename(newClassn = myClassn) %>%
+          dplyr::select(-descr)
         
         # and another of just owners and descrips
         ownrs <- dplyr::select(olddescr, -myClassn)
@@ -279,86 +281,87 @@
             dplyr::select(-descr) %>%
             left_join(ownrs, by = "owner")
           assign(newcadlist[i], lui)
-          
+        }        
         
-       }        
-           
-      
-      # save.image(file = "landuse.RData")
        
-          # and export to arcmap to check out remaining unknowns
-        exportlist <- c("lu08", "lu10", "lu11", "lu12", "lu13", "lu14", "lu16")
-        for(i in 1:length(exportlist)) {
-          lui = get(exportlist[i])
-          writeOGR(lui, dsn = "../GIS/Shapefiles/Land",
-            layer = exportlist[i],
-            driver = "ESRI Shapefile",
-            overwrite_layer = TRUE)  
-        }
+        # gave in and manually made csv of updated classns based on ownership
+        mandesc <- read.csv("manualdescrips.csv") %>%
+          rename(manClassn = myClassn) %>%
+          mutate(manClassn = as.character(manClassn))
+        
+         
+        # add myClassns from updated descrips
+        lulist <- grep("^lu[[:digit:]]", objects(), value = TRUE)  
         
         
-      #### KRISTIN YOU LEFT OFF HERE ####
-        # at a complete loss as to why the below code correctly classifies Mining Claims etc
-        # but your for loop below it doesn't. what little silly mistake have you made??
-            # the first ifelse of the loop seems to work fine
-            # but all the ones after that are -i think- broken
-        
-      # getting closer but still at a fucking loss
-        
-        # helpful hints:
-        
-        # there are no NAs in the @data until you run your messed up loop
-        # loop introduces NAs that shouldn't be there (they should be "UNK")
-        # also it seems to work passably on older data but not newer
-        # although you could just be confused about that
-        
-        # i think figure out NAs and you'll be close
-        # see troubleshooting code for other loop options (that also don't really work well)
-          
-        
-        test <- lu13@data %>%
-          mutate(myClassn = ifelse(myClassn != "UNK", myClassn,
-             ifelse(propType == "MC - Mining Claim", "YAY!",
-                          ifelse(descr == "Public" | descr == "USFS" | descr == "BLM" | owner == "BLM" | descr == "NPS", "PUB", 
-            "PENIS"))))
-
-        
-        #### FIX ME KRISTINNNNNNNN ####
-        
-        # add updated classns to all cadastrals
-        lulist <- grep("^lu[[:digit:]]", objects(), value = TRUE)   
-
+        # if myClassn is UNK or NA, update with new classns from descrips df
         for (i in 1:length(lulist)) {
           
-          # identify the file
-          lui <- get(lulist[i])
+         lui <- get(lulist[i])
+         
+         lui@data <- lui@data %>%
+           left_join(classns, by = "owner") %>%
+           mutate(newClassn = ifelse(is.na(newClassn), "UNK", newClassn)) %>%
+           mutate(myClassn = ifelse(myClassn == "UNK", newClassn, myClassn)) %>%
+           left_join(mandesc, by = "descr") %>%
+           mutate(manClassn = ifelse(is.na(manClassn), "UNK", manClassn)) %>%
+           mutate(myClassn = ifelse(myClassn == "UNK", manClassn, myClassn)) %>%
+           dplyr::select(-c(newClassn, manClassn)) %>%
+           mutate(temp = ifelse(is.na(owner), myClassn, ifelse(owner == "BLM", "PUB", myClassn))) %>%
+           rename(Classn = temp) %>%
+           dplyr::select(-myClassn)
 
-          # update some unknown classifications
-          lui@data <- lui@data %>%
-            # if already classified as ag or dev, don't mess with it
-            mutate(myClassn = ifelse(myClassn != "UNK", myClassn,
-              # classify obvious public as such
-              ifelse(descr == "Public" | descr == "USFS" | 
-                     descr == "BLM" | owner == "BLM" | descr == "NPS", "PUB", 
-              # ditto obvious developed/developable lands   
-              ifelse(descr == "Private" | descr == "Utl Ease" | 
-                     descr == "RgtOfWay" | propType == "MC - Mining Claim", "DEV", 
-              # and classify water as NA  
-              ifelse(descr == "Water", "NA", "UNK")))))
-
-            
-          # store as r object
-          assign(paste0("new", lulist[i]), lui)
-          # 
-          # # and export to arcmap to check out remaining unknowns
-          # writeOGR(lui, dsn = "../GIS/Shapefiles/Land",
-          #   layer = lulist[i],
-          #   driver = "ESRI Shapefile",
-          #   overwrite_layer = TRUE)
-       }        
+         
+         assign(paste0("new", lulist[i]), lui)
+         
+         
+          # and export to arcmap to check out remaining unknowns
+          writeOGR(lui, dsn = "../GIS/Shapefiles/Land",
+            layer = paste0("lu", substr(lulist[i],3,4)),
+            driver = "ESRI Shapefile",
+            overwrite_layer = TRUE)
+         
+        }
            
 
+        
+      #### make owner match Water or RgtOfWay descrs
+        
+        # remove and read back in in "lu" shps (bc i just manually updated WY owners in arcmap, not my smartest plan)
+        rm(lu08, lu10, lu11, lu12, lu13, lu14, lu16, newlu08, newlu10, newlu11, newlu12, newlu13, newlu14, newlu16)
+       
+ 
+        # identify land ownership files updated in arcmap
+        newlulist <- list.files(path = "../GIS/Shapefiles/Land",
+          pattern = "lu.+shp$",full.names = TRUE)
+     
+         # fix water and rightofway owners; re-export
+         for (i in 1:length(newlulist)) {
+           
+           lui <- shapefile(newlulist[i])
+           lui@data$owner = ifelse(is.na(lui@data$descr), lui@data$owner,
+             ifelse(lui@data$descr == "Water", "Water",
+             ifelse(lui@data$descr == "RgtOfWay", "RgtOfWay", lui@data$owner)))
+           
 
-         ## KRISTIN you left off figuring out how to classify
-        # some remaining NAs at the bottom of that preceding for loop
-        # (se nas df) before storing the new shapefiles
+           
+          assign(paste0("new", lulist[i]), lui)
+         
+         
+          # and export to arcmap to check out remaining unknowns
+          writeOGR(lui, dsn = "../GIS/Shapefiles/Land",
+            layer = paste0("lu", substr(lulist[i],3,4)),
+            driver = "ESRI Shapefile",
+            overwrite_layer = TRUE)
+         }
+
+   
+       
+        
+       save.image(file = "landuse.RData")
+       
+
+        
+
+  
+           
