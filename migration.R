@@ -16,13 +16,13 @@
 
   #### Packages ####
   
-    library(foreign)
-    library(nnet) # multinom
+    library(foreign) # unimportant?
     library(ggplot2) # pretty plots
     library(gridExtra) # >1 plot per display
-    library(reshape2)
-    library(ordinal) # ordinal response
+    library(reshape2) # jitter etc for data viz
+    library(ordinal) # ordinal response w random effect
     library(AICcmodavg) # model comparison
+    library(MuMIn) # model averaging
     library(dplyr) # data manipulation
     
     
@@ -44,71 +44,22 @@
 
     
 
-### ### ### ###  ### ### ### ### ###
-####  | DATA PREP - run once |  ####
-### ### ### ###  ### ### ### ### ###
+### ### ### ###  ### 
+####  | DATA |  ####
+### ### ### ###  ### 
     
     
-  #### "Raw" data  ####
+    # read in data (from dataprep-migration.R) 
+    dat <- read.csv("moddat.csv")
     
-    deltafor <- read.csv("deltafor.csv") # from forage.R
-    predfor <- read.csv("predfor.csv") # from forage.R
-    dens <- read.csv("dens-indiv.csv") # from consdens.R
-    age <- read.csv("indiv-dat.csv") # from dataprep-elkdb.R
-    behav <- read.csv("mig-behav.csv") # from migbehav-migrateR.R
-    behavpop <- read.csv("behav-per-popn.csv") # from migbehav-migrateR.R
-    popndens <- read.csv("dens-group.csv") # from consdens.R
-    hum <- read.csv("human-covariates.csv") # from landuse.R
- 
-       
-  #### Model data  ####
+    # format behavior as ordinal (res < int < mig) and dummy variables as factors
+    dat$behavO <- factor(dat$Behav, levels = c("resident", "other", "migrant"), ordered = TRUE)
+    dat$irrig <- factor(dat$irrig)
+    dat$Old <- factor(dat$Old)
     
     
-    # data per indiv
-    dat <- age %>%
-      # start with age, this incls all captured elk
-      dplyr::select(AnimalID, Old) %>%
-      # add behavior and only retain indivs incld in that analysis
-      inner_join(behav, by = "AnimalID") %>%
-      dplyr::select(AnimalID, Behav, Old) %>%
-      # add conspecific density and forage covariates
-      left_join(dens, by = "AnimalID") %>%
-      left_join(predfor, by = "Herd") %>%
-      # only keep columns of interest
-      dplyr::select(AnimalID, Behav, Old, Dens, Herd, StDevAmp, StDevTi) %>%
-      # make predFor indicate how predictably forage varies (not how unpredictably)
-      rename(PredForAmp = StDevAmp, PredForTi = StDevTi) %>%
-      mutate(PredForAmp = -1*PredForAmp, PredForTi = -1*PredForTi) %>%
-      left_join(deltafor, by = "AnimalID") %>%
-      # remove extraneous columns
-      dplyr::select(-c(maxNDVIin, maxNDVIout, Herd)) %>%
-      # make column name more intuitive
-      rename(deltaFor = deltaNDVI) %>%
-      # add human-related covariates and remove extraneous columns
-      left_join(hum, by = "AnimalID") %>%
-      # rm 2 indivs with locs too late to estimate winHR
-      filter(!is.na(Herd))
-    dat <- droplevels(dat) # rm stored info from dropped indivs
-    write.csv(dat, "moddat.csv", row.names=F)
-
-
-    # data per popn, incl age
-    popold <- dat %>% 
-      dplyr::select(Herd, Old) %>% 
-      filter(!is.na(Herd), !is.na(Old)) %>%
-      group_by(Herd) %>% 
-      summarise(ppnOld = sum(Old)/n())
-    popdat <- dat %>%
-      dplyr::select(Herd, Dens, PredForTi) %>%
-      filter(!is.na(Herd)) %>%
-      left_join(behavpop, by = "Herd") %>%
-      left_join(popold, by = "Herd") %>%
-      distinct() %>%
-      # rm "clarks fk" density data from indivs that used other areas
-      filter((Herd == "Clarks Fork" & Dens > 2) | Herd != "Clarks Fork") %>%
-      arrange(Herd)
-    write.csv(popdat, "pop-summaries.csv", row.names=F)
-    
+    # create df for indivs with no age estimation 
+    olddat <- filter(dat, !is.na(Old))
     
 
 
@@ -117,18 +68,6 @@
 ### ### ### ### ### ### ### ##    
     
 
-    ## read in data (if already run once) ##
-    dat <- read.csv("moddat.csv")
-    popdat <- read.csv("pop-summaries.csv")
-    # remove indivs for whom we have no age estimation #
-    moddat <- filter(dat, !is.na(Old))
-    
-    
-    ## format behavior as ordinal ##
-    dat$behavO <- factor(dat$Behav, levels = c("resident", "other", "migrant"), ordered = TRUE)
-    moddat$behavO <- factor(moddat$Behav, levels = c("resident", "other", "migrant"), ordered = TRUE)
-    
-    
     #### General looks at indiv covariates ####
 
     
@@ -136,8 +75,11 @@
       length(which(moddat$Old == 1))
       
       # number of migrants
-      length(which(moddat$Behav == "migrant"))
-      length(which(moddat$Behav == "migrant"))/nrow(dat)
+      length(which(dat$Behav == "migrant"))
+      length(which(dat$Behav == "migrant"))/nrow(dat)
+      
+      # and residents
+      length(which(dat$Behav == "resident"))/nrow(dat)      
       
       # summary tables of binary covariates
       lapply(moddat[, c("Behav", "Old", "irrig")], table)
@@ -145,7 +87,23 @@
       # three-way contingency table
       ftable(xtabs(~ Old + Behav + irrig, data = moddat))
       
+      # distributions of continuous covariates
+      par(mfrow = c(2,2))
+      hist(dat$predFor, main = "predFor")
+      hist(dat$deltaFor, main = "deltaFor")
+      hist(dat$Dens, main = "Cons Dens")
+      hist(dat$densOwn, main = "Human use")
+      par(mfrow = c(1,1))
       
+      # digging deeper into distributions
+      summary(dat$Dens)
+      summary(dat$densOwn)
+      
+      hist(log(dat$Dens), main = "log(cons dens)") # eh, passable?
+      hist(log(dat$densOwn), main = "log(human)") # hello gorgeous
+      hist(sqrt(dat$Dens), main = "sqrt(cons dens)") # worse
+      hist((dat$Dens)^(0.3333)) # log still better
+      hist(1/log(dat$Dens)) # yeesh
   
       
    #### General plots of univariate relationships ####
@@ -192,286 +150,383 @@
       
       
  
+        
+        
+  #### Prediction data ####
+        
+      ## i have no idea what this does tbh but predict.clm2 rdocumentation includes it so...
+      options(contrasts = c("contr.treatment", "contr.poly"))
+      
+
+      ## duplicate data for each response category (make all possible combos of covs for ea behav)
+      dupedat <- expand.grid(behavO = unique(dat$behavO), 
+        predFor = unique(dat$predFor),
+        deltaFor = unique(dat$deltaFor),
+        irrig = as.factor(c(0, 1)),
+        Dens = unique(dat$Dens),
+        Old = as.factor(c(0, 1)),
+        densOwn = unique(dat$densOwn))
     
-    #### Testing for differences in covariates bt behavior types ####   
 
-
+    
+  #### check covariates for collinearity & assess univariate relationships ####
       
-      # dens
-        
-        aov.d <- aov(Dens ~ Behav, data = moddat)
-        summary(aov.d)
-        TukeyHSD(aov.d)
-        
-
-
-      # deltafor
-
-        aov.df <- aov(deltaFor ~ Behav, data = moddat)
-        summary(aov.df)
-        TukeyHSD(aov.df)  
-              
-        
-      # predfor
-
-        aov.pf <- aov(PredForTi ~ Behav, data = moddat)
-        summary(aov.pf)
-        TukeyHSD(aov.pf)  
-        
-        
-      # age
-
-       agetab <- matrix(c(4,61,37,163,2,47), 2, 3, 
-         dimnames = list(age = c("nOld", "nYoung"),
-                         behav = c("resident", "migrant", "other")))
-       fisher.test(agetab)
- 
-          
-
-### ### ### ### ##
-#### |MODELS| ####
-### ### ### ### ##
-       
-       
-       
-    #### Choose remotely-sensed metric to use for forage variability ####
-       
-      mods.for <- list()
-      mods.for.nms <- c("PredAmp", "PredTi")
-      mods.for[[1]] <- clmm(behavO ~ PredForAmp + (1|Herd), data = dat)
-      mods.for[[2]] <- clmm(behavO ~ PredForTi + (1|Herd), data = dat)
-      aictab(cand.set = mods.for, modnames = mods.for.nms)
-      # within 1 deltaAIC; have no evidence to support one over other
-      # predAmp slightly better (AICcWt = 0.61) so just rolling with that one
-      
-      dat$predFor = dat$PredForAmp
-      moddat$predFor = moddat$PredForAmp
-      
- 
-          
-    #### check covariates for collinearity & assess univariate relationships ####
-      
-      dat.cor <- moddat %>%
-        dplyr::select(behavO, predFor, deltaFor, betFor, Dens, Old, densOwn, ppnAg, irrig)
+      dat.cor <- dat %>%
+        dplyr::select(behavO, predFor, deltaFor, Dens, Old, densOwn, ppnAg, irrig)
       source("pairs-panels.R")
       pairs.panels(dat.cor)
       # all < 0.60
       
       
       
-    #### univariate models ####
       
-      # df to store results of each model      
-      dat.uni <- data.frame(cov = NA, coeff = NA, dirEffect = NA, spt95 = NA,
-                            spt90 = NA, spt80 = NA, spt75 = NA)  
-      
-      
-      # define each model
-      pf <- clmm(behavO ~ predFor + (1|Herd), data = moddat)
-      df <- clmm(behavO ~ deltaFor + (1|Herd), data = moddat)
-      dn <- clmm(behavO ~ Dens + (1|Herd), data = moddat)
-      ol <- clmm(behavO ~ Old + (1|Herd), data = moddat)
-      ow <- clmm(behavO ~ densOwn + (1|Herd), data = moddat)
-      ag <- clmm(behavO ~ ppnAg + (1|Herd), data = moddat)
-      ay <- clmm(behavO ~ irrig + (1|Herd), data = moddat)
-      
-      #predFor 
-      d.pf <- data.frame(coef(summary(pf))) %>%
-        tibble::rownames_to_column() %>%
-        rename(cov = rowname, coeff = Estimate, se = "Std..Error") %>%
-        filter(!grepl("other", cov)) %>%
-        mutate(CI95low = coeff - (1.96*se), CI95high = coeff + (1.96*se),
-               CI90low = coeff - (1.645*se), CI90high = coeff + (1.645*se),
-               CI80low = coeff - (1.28*se), CI80high = coeff + (1.28*se),
-               CI75low = coeff - (1.15*se), CI75high = coeff + (1.15*se),
-               CI70low = coeff - (1.04*se), CI70high = coeff + (1.04*se)) %>%
-        mutate(spt95 = ifelse(CI95low < 0 & CI95high > 0, 0, 1),
-               spt90 = ifelse(CI90low < 0 & CI90high > 0, 0, 1),
-               spt80 = ifelse(CI80low < 0 & CI80high > 0, 0, 1),
-               spt75 = ifelse(CI75low < 0 & CI75high > 0, 0, 1),
-               spt70 = ifelse(CI70low < 0 & CI70high > 0, 0, 1)) %>%
-        mutate(dirEffect = ifelse(coeff > 0, "pos", "neg")) %>%
-        dplyr::select(cov, coeff, dirEffect, spt95, spt90, spt80, spt75)
-      
-      # deltaFor
-      d.df <- data.frame(coef(summary(df))) %>%
-        tibble::rownames_to_column() %>%
-        rename(cov = rowname, coeff = Estimate, se = "Std..Error") %>%
-        filter(!grepl("other", cov)) %>%
-        mutate(CI95low = coeff - (1.96*se), CI95high = coeff + (1.96*se),
-               CI90low = coeff - (1.645*se), CI90high = coeff + (1.645*se),
-               CI80low = coeff - (1.28*se), CI80high = coeff + (1.28*se),
-               CI75low = coeff - (1.15*se), CI75high = coeff + (1.15*se),
-               CI70low = coeff - (1.04*se), CI70high = coeff + (1.04*se)) %>%
-        mutate(spt95 = ifelse(CI95low < 0 & CI95high > 0, 0, 1),
-               spt90 = ifelse(CI90low < 0 & CI90high > 0, 0, 1),
-               spt80 = ifelse(CI80low < 0 & CI80high > 0, 0, 1),
-               spt75 = ifelse(CI75low < 0 & CI75high > 0, 0, 1),
-               spt70 = ifelse(CI70low < 0 & CI70high > 0, 0, 1)) %>%
-        mutate(dirEffect = ifelse(coeff > 0, "pos", "neg")) %>%
-        dplyr::select(cov, coeff, dirEffect, spt95, spt90, spt80, spt75)
+### ### ### ### ##
+#### |MODELS| ####
+### ### ### ### ##
        
-      # conspecific density     
-      d.dn <- data.frame(coef(summary(dn))) %>%
-        tibble::rownames_to_column() %>%
-        rename(cov = rowname, coeff = Estimate, se = "Std..Error") %>%
-        filter(!grepl("other", cov)) %>%
-        mutate(CI95low = coeff - (1.96*se), CI95high = coeff + (1.96*se),
-               CI90low = coeff - (1.645*se), CI90high = coeff + (1.645*se),
-               CI80low = coeff - (1.28*se), CI80high = coeff + (1.28*se),
-               CI75low = coeff - (1.15*se), CI75high = coeff + (1.15*se),
-               CI70low = coeff - (1.04*se), CI70high = coeff + (1.04*se)) %>%
-        mutate(spt95 = ifelse(CI95low < 0 & CI95high > 0, 0, 1),
-               spt90 = ifelse(CI90low < 0 & CI90high > 0, 0, 1),
-               spt80 = ifelse(CI80low < 0 & CI80high > 0, 0, 1),
-               spt75 = ifelse(CI75low < 0 & CI75high > 0, 0, 1),
-               spt70 = ifelse(CI70low < 0 & CI70high > 0, 0, 1)) %>%
-        mutate(dirEffect = ifelse(coeff > 0, "pos", "neg")) %>%
-        dplyr::select(cov, coeff, dirEffect, spt95, spt90, spt80, spt75)
-      
-      # old
-      d.ol <- data.frame(coef(summary(ol))) %>%
-        tibble::rownames_to_column() %>%
-        rename(cov = rowname, coeff = Estimate, se = "Std..Error") %>%
-        filter(!grepl("other", cov)) %>%
-        mutate(CI95low = coeff - (1.96*se), CI95high = coeff + (1.96*se),
-               CI90low = coeff - (1.645*se), CI90high = coeff + (1.645*se),
-               CI80low = coeff - (1.28*se), CI80high = coeff + (1.28*se),
-               CI75low = coeff - (1.15*se), CI75high = coeff + (1.15*se),
-               CI70low = coeff - (1.04*se), CI70high = coeff + (1.04*se)) %>%
-        mutate(spt95 = ifelse(CI95low < 0 & CI95high > 0, 0, 1),
-               spt90 = ifelse(CI90low < 0 & CI90high > 0, 0, 1),
-               spt80 = ifelse(CI80low < 0 & CI80high > 0, 0, 1),
-               spt75 = ifelse(CI75low < 0 & CI75high > 0, 0, 1),
-               spt70 = ifelse(CI70low < 0 & CI70high > 0, 0, 1)) %>%
-        mutate(dirEffect = ifelse(coeff > 0, "pos", "neg")) %>%
-        dplyr::select(cov, coeff, dirEffect, spt95, spt90, spt80, spt75)
-      
-      # ownership density
-      d.ow <- data.frame(coef(summary(ow))) %>%
-        tibble::rownames_to_column() %>%
-        rename(cov = rowname, coeff = Estimate, se = "Std..Error") %>%
-        filter(!grepl("other", cov)) %>%
-        mutate(CI95low = coeff - (1.96*se), CI95high = coeff + (1.96*se),
-               CI90low = coeff - (1.645*se), CI90high = coeff + (1.645*se),
-               CI80low = coeff - (1.28*se), CI80high = coeff + (1.28*se),
-               CI75low = coeff - (1.15*se), CI75high = coeff + (1.15*se),
-               CI70low = coeff - (1.04*se), CI70high = coeff + (1.04*se)) %>%
-        mutate(spt95 = ifelse(CI95low < 0 & CI95high > 0, 0, 1),
-               spt90 = ifelse(CI90low < 0 & CI90high > 0, 0, 1),
-               spt80 = ifelse(CI80low < 0 & CI80high > 0, 0, 1),
-               spt75 = ifelse(CI75low < 0 & CI75high > 0, 0, 1),
-               spt70 = ifelse(CI70low < 0 & CI70high > 0, 0, 1)) %>%
-        mutate(dirEffect = ifelse(coeff > 0, "pos", "neg")) %>%
-        dplyr::select(cov, coeff, dirEffect, spt95, spt90, spt80, spt75)      
-      
-      # ppnAg
-      d.ag <- data.frame(coef(summary(ag))) %>%
-        tibble::rownames_to_column() %>%
-        rename(cov = rowname, coeff = Estimate, se = "Std..Error") %>%
-        filter(!grepl("other", cov)) %>%
-        mutate(CI95low = coeff - (1.96*se), CI95high = coeff + (1.96*se),
-               CI90low = coeff - (1.645*se), CI90high = coeff + (1.645*se),
-               CI80low = coeff - (1.28*se), CI80high = coeff + (1.28*se),
-               CI75low = coeff - (1.15*se), CI75high = coeff + (1.15*se),
-               CI70low = coeff - (1.04*se), CI70high = coeff + (1.04*se)) %>%
-        mutate(spt95 = ifelse(CI95low < 0 & CI95high > 0, 0, 1),
-               spt90 = ifelse(CI90low < 0 & CI90high > 0, 0, 1),
-               spt80 = ifelse(CI80low < 0 & CI80high > 0, 0, 1),
-               spt75 = ifelse(CI75low < 0 & CI75high > 0, 0, 1),
-               spt70 = ifelse(CI70low < 0 & CI70high > 0, 0, 1)) %>%
-        mutate(dirEffect = ifelse(coeff > 0, "pos", "neg")) %>%
-        dplyr::select(cov, coeff, dirEffect, spt95, spt90, spt80, spt75) 
-      
-      # irrig (y/n)
-      d.ay <- data.frame(coef(summary(ay))) %>%
-        tibble::rownames_to_column() %>%
-        rename(cov = rowname, coeff = Estimate, se = "Std..Error") %>%
-        filter(!grepl("other", cov)) %>%
-        mutate(CI95low = coeff - (1.96*se), CI95high = coeff + (1.96*se),
-               CI90low = coeff - (1.645*se), CI90high = coeff + (1.645*se),
-               CI80low = coeff - (1.28*se), CI80high = coeff + (1.28*se),
-               CI75low = coeff - (1.15*se), CI75high = coeff + (1.15*se),
-               CI70low = coeff - (1.04*se), CI70high = coeff + (1.04*se)) %>%
-        mutate(spt95 = ifelse(CI95low < 0 & CI95high > 0, 0, 1),
-               spt90 = ifelse(CI90low < 0 & CI90high > 0, 0, 1),
-               spt80 = ifelse(CI80low < 0 & CI80high > 0, 0, 1),
-               spt75 = ifelse(CI75low < 0 & CI75high > 0, 0, 1),
-               spt70 = ifelse(CI70low < 0 & CI70high > 0, 0, 1)) %>%
-        mutate(dirEffect = ifelse(coeff > 0, "pos", "neg")) %>%
-        dplyr::select(cov, coeff, dirEffect, spt95, spt90, spt80, spt75) 
-      
-      # data frame summarizing all results      
-      univariate <- bind_rows(d.pf, d.df, d.dn, d.ol, d.ow, d.ag, d.ay)
-      
-      
-      # forage with binary 0/1 for whether forage better off winter range
-      test <- data.frame(coef(summary(for3))) %>%
-        tibble::rownames_to_column() %>%
-        rename(cov = rowname, coeff = Estimate, se = "Std..Error") %>%
-        filter(!grepl("other", cov)) %>%
-        mutate(CI95low = coeff - (1.96*se), CI95high = coeff + (1.96*se),
-               CI90low = coeff - (1.645*se), CI90high = coeff + (1.645*se),
-               CI80low = coeff - (1.28*se), CI80high = coeff + (1.28*se),
-               CI75low = coeff - (1.15*se), CI75high = coeff + (1.15*se),
-               CI70low = coeff - (1.04*se), CI70high = coeff + (1.04*se)) %>%
-        mutate(spt95 = ifelse(CI95low < 0 & CI95high > 0, 0, 1),
-               spt90 = ifelse(CI90low < 0 & CI90high > 0, 0, 1),
-               spt80 = ifelse(CI80low < 0 & CI80high > 0, 0, 1),
-               spt75 = ifelse(CI75low < 0 & CI75high > 0, 0, 1),
-               spt70 = ifelse(CI70low < 0 & CI70high > 0, 0, 1)) %>%
-        mutate(dirEffect = ifelse(coeff > 0, "pos", "neg")) %>%
-        dplyr::select(cov, coeff, dirEffect, spt95, spt90, spt80, spt75) 
-      
+       
 
-    #### standardized forage covariates (to assess relative influence of each) ####
+    #### define a priori models ####
       
-      # need transformation before scaling?
-      par(mfrow=c(3,1))
-      hist(moddat$predFor)
-      hist(moddat$deltaFor)
-      hist(log(moddat$deltaFor)) # predFor is ok; deltaFor needs log transformation
-      hist(log(moddat$deltaFor)); hist(log(moddat$deltaFor+0.01)); hist(log(moddat$deltaFor+0.05))
-      length(which(moddat$deltaFor == 0))/nrow(moddat)
+      m1 <- clmm(behavO ~ deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m2 <- clmm(behavO ~ predFor + deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m3 <- clmm(behavO ~ predFor + deltaFor + (deltaFor*predFor) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m4 <- clmm(behavO ~ predFor + deltaFor + Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m5 <- clmm(behavO ~ predFor + deltaFor + Dens + (deltaFor*Dens) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m6 <- clmm(behavO ~ predFor + deltaFor + Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m7 <- clmm(behavO ~ predFor + deltaFor + Old + (deltaFor*Old) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m8 <- clmm(behavO ~ predFor + deltaFor + Old + Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m9 <- clmm(behavO ~ predFor + deltaFor + Old + Dens + (Old*Dens) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m10 <- clmm(behavO ~ densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m11 <- clmm(behavO ~ predFor + deltaFor + densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m12 <- clmm(behavO ~ predFor + deltaFor + densOwn + (deltaFor*predFor) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m13 <- clmm(behavO ~ predFor + deltaFor + densOwn + (deltaFor*densOwn) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m14 <- clmm(behavO ~ densOwn + Old + (densOwn*Old) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m15 <- clmm(behavO ~ predFor + deltaFor + densOwn + Old + (densOwn*Old) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m16 <- clmm(behavO ~ irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m17 <- clmm(behavO ~ densOwn + irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m18 <- clmm(behavO ~ predFor + deltaFor + irrig   + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m19 <- clmm(behavO ~ predFor + deltaFor + irrig + (deltaFor*irrig) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)  
+      m20 <- clmm(behavO ~ predFor + deltaFor + irrig + (predFor*irrig) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m21 <- clmm(behavO ~ irrig + Dens + (irrig*Dens) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m22 <- clmm(behavO ~ predFor + irrig + Dens + (irrig*Dens) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)  
+      m23 <- clmm(behavO ~ predFor + irrig + Old + Dens + (Old*Dens) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)  
+      m24 <- clmm(behavO ~ densOwn + irrig + Dens + (irrig*Dens) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+      m25 <- clmm(behavO ~ densOwn + irrig + Dens + (densOwn*Dens) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat) 
+      m26 <- clmm(behavO ~ predFor + irrig + densOwn + (irrig*densOwn) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat) 
       
-      # standardize each
-      test <- moddat %>%
-        mutate(predForStd = predFor-(mean(predFor)/sd(predFor)),
-          deltaForLog = log(deltaFor + 1),
-          deltaForStd = deltaForLog - (mean(deltaForLog)/sd(deltaForLog)))
-      summary(test$deltaForStd); summary(test$predForStd)
-      par(mfrow=c(2,1)); hist(test$predForStd); hist(test$deltaForStd)
       
-      # cutting losses and moving on for now; can't get standardization of log to work right
-      
-      
-    #### assessing possible deltaFor covariates (choose 1 as baseline for other models that use forage) #### 
-      
-      # create new binary covariate for whether forage is better outside winter range or not
-      moddat$betFor = ifelse(moddat$deltaFor > 0, 1, 0)
-      
-      # define models
-      for1 <- clmm(behavO ~ predFor + deltaFor + (1|Herd), data = moddat)
-      for2 <- clmm(behavO ~ predFor + deltaFor + I(predFor*deltaFor) + (1|Herd), data = moddat)
-      for3 <- clmm(behavO ~ predFor + betFor + (1|Herd), data = moddat)
-      for4 <- clmm(behavO ~ predFor + betFor + I(predFor*betFor) + (1|Herd), data = moddat)
-
       # compete with AICc #
       mods <- list()
-      modnms <- c("plusDelta", "intrxnDelta", "plusBet", "intrxnBet")
-      mods[[1]] <- for1
-      mods[[2]] <- for2
-      mods[[3]] <- for3
-      mods[[4]] <- for4
+      modnms <- paste0("m", rep(1:26))
+      for (i in 1:length(modnms)) { mods[[i]] <- get(modnms[[i]]) }
       aictab(cand.set = mods, modnames = modnms)
-      # plus the binary covariate and interaction with the binary covariate are indistinguishable
-      # (deltaAICc = 1.96 with slightly better support for plus), so i don't think intrxn necessary
- 
+      aictab <- data.frame(aictab(cand.set = mods, modnames = modnms))
+      write.csv(aictab, "aic-allbehavmods.csv", row.names=F)
       
+      # identify prelim top-supported models (still need to look at LL, K, etc) 
+      ftw <- subset(aictab, Delta_AICc < 4.0); ftw <- droplevels(ftw)
       
+      # remove m15 from list of supported (only w/i 4 deltaAIC bc of extra parameter; LL not appreciably better)
+      ftw <- ftw[ftw$Modnames != "m15",]
       
+      # and split out moderately-supported models from top model
+      topmod <- m19
+      okmods <- ftw[ftw$Modnames != "m19",]
 
       
       
+      
+  #### AMERICA'S NEXT TOP MODEL! #### 
+      
+    # add back in the indivs for whom we don't have age estimations (age isn't a covariate; might as well use everybody)
+    mod <- clmm(behavO ~ predFor + deltaFor + irrig + (deltaFor*irrig) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)  
+      
+    #### summary info ####
+      
+      summary(mod)
+      coef(mod)
+      confint(mod, level = 0.85)
+      
+    
+    
+    #### convert to estimates and CIs to odds ratios and store ####
+      
+      ciTop <- confint(mod)
+      coefsTop <- coef(mod)
+      orsTop <- exp(cbind(OR = coefsTop, ciTop))
+      resTop <- data.frame(orsTop) %>%
+        tibble::rownames_to_column() %>%
+        rename(coeff = rowname, CIlow = X2.5.., CIhigh = X97.5..)
+      write.csv(resTop, "results-topmodel.csv", row.names=F)
+        
+  
+    #### proportional odds assumption ####
+        
+      # Agresti 2002 says this assumption should be based more on 
+      # the inference you want to draw from your model than on
+      # methematical considerations, but out of curiosity...
+      # prelim quick test (using models without random effect of herd) 
+      m19test <- clm(behavO ~ predFor + deltaFor + irrig + (deltaFor*irrig), Hess = TRUE, nAGQ = 10, dat = dat) 
+      nominal_test(m19test) # nothing significant, good enough for me
+      scale_test(m19test) # predfor is significant here, cool, check this out later
+      
+
+      
+        
+  #### MODERATELY-SUPPORTED MODELS #### 
+      
+      #### looking at each ####
+        
+        ftw$Modnames
+        # remove unsupported model (m19) and top model (m15)
+        bottommods <- ftw[ftw$Modnames != "m19" & ftw$Modnames != "m15",]
+        
+        # Arnold 2010 recommends 85% CI | #CI!=0 other than predfor
+        confint(m2, level = 0.85) 
+        confint(m6, level = 0.85) 
+        confint(m3, level = 0.85) 
+        confint(m22, level = 0.85) 
+        confint(m11, level = 0.85) #irrig & irrig:dens
+        confint(m4, level = 0.85) 
+      
+      
+      
+  #### MODEL AVERAGING #### 
+      
+      
+      #### center all covariates (because interaction terms) ####
+      
+      ctrdat <- olddat %>%
+        mutate(predForCtr = predFor - mean(predFor),
+               deltaForCtr = deltaFor - mean(deltaFor),
+               irrigCtr = as.numeric(irrig) - mean(as.numeric(irrig)),
+               densCtr = Dens - mean(Dens),
+               oldCtr = as.numeric(Old) - mean(as.numeric(Old)),
+               densOwnCtr = densOwn - mean(densOwn))
+        
+        
+      #### define models using centered covariates ####
+        
+        m19c <- clmm(behavO ~ predForCtr + deltaForCtr + irrigCtr + (deltaForCtr*irrigCtr) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = ctrdat)  
+        m2c <- clmm(behavO ~ predForCtr + deltaForCtr + (1|Herd), Hess = TRUE, nAGQ = 10, dat = ctrdat)
+        m6c <- clmm(behavO ~ predForCtr + deltaForCtr + oldCtr + (1|Herd), Hess = TRUE, nAGQ = 10, dat = ctrdat)
+        m3c <- clmm(behavO ~ predForCtr + deltaForCtr + (deltaForCtr*predForCtr) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = ctrdat)
+        m22c <- clmm(behavO ~ predForCtr + irrigCtr + densCtr + (irrigCtr*densCtr) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = ctrdat)  
+        m11c <- clmm(behavO ~ predForCtr + deltaForCtr + densOwnCtr + (1|Herd), Hess = TRUE, nAGQ = 10, dat = ctrdat)
+        m4c <- clmm(behavO ~ predForCtr + deltaForCtr + densCtr + (1|Herd), Hess = TRUE, nAGQ = 10, dat = ctrdat)
+   
+             
+      #### average the models ####
+        
+        avgmod <- model.avg(m19c, m2c, m6c, m3c, m22c, m11c, m4c) 
+        summary(avgmod)
+        round(confint(avgmod, level = 0.85), 2)
+
+        
+      #### exponentiate relevant info from model ####
+        
+        orsAvg <- round(exp(coef(avgmod)), 2)
+        ciAvg95 <- round(exp(confint(avgmod, level = 0.95)), 2)
+        ciAvg85 <- round(exp(confint(avgmod, level = 0.85)), 2)
+
+        
+      #### create and store dataframe of exponentiated info ####
+        
+        avgdat <- data.frame(
+          OR = orsAvg,
+          ciLow95 = ciAvg95[,1],
+          ciHigh95 = ciAvg95[,2],
+          ciLow85 = ciAvg85[,1],
+          ciHigh85 = ciAvg85[,2]) %>%
+          tibble::rownames_to_column() %>%
+          rename(cov = rowname)
+        write.csv(avgdat, "avgmod-estiamtes.csv", row.names = F)
+            
+          
+### ### ### ### ###
+#### |VISUALS| ####
+### ### ### ### ###
+      
+      
+ 
+    #### Effects per herd ####
+        
+        
+      ## *KRISTIN MAKE THIS NOT UGLY* ####
+        
+      # this is basically doing center +- spread for the variance per herd
+      ci <- m19$ranef + qnorm(0.975) * sqrt(m19$condVar) %o% c(-1, 1) # %o% = genius
+      # order effect from low to high
+      ord.re <- order(m19$ranef)
+      ci <- ci[order(m19$ranef),]
+      # and order herds to match their index numbers
+      herdnums <- data.frame(Herd = unique(olddat$Herd), herdNum = 1:16)
+      herdnums <- herdnums[match(ord.re, herdnums$herdNum),]
+      #plot estimates
+      plot(1:16, m19$ranef[ord.re], axes = FALSE, ylim = range(ci),
+        xlab = "", ylab = "Herd effect")
+      axis(1, at = 1:16, labels = herdnums$Herd, las=2) #las=2 rotates vert
+      axis(2)
+      # add 95% CIs
+      for(i in 1:16) segments(i, ci[i, 1], i, ci[i, 2])
+      abline(h = 0, lty = 2)
+      # 4 don't overlap 0; guess those would be considered the "extreme" herds
+         # pio, sage ck, blacktail (neg) and silver run (pos)   
+          # silver run only has 5 indivs; could cut them
+            # [later...] tried; doesn't change inference so left them in
+
+ 
+      
+        
+    #### Prediction plots - Top model ####
+      
+      
+        ## make predictions ##
+
+        
+            ## define top model using clmm2 (predict doesn't work with clmm) ##
+            topmod2 <- clmm2(behavO ~ predFor + deltaFor + irrig + (deltaFor*irrig), 
+                             random = Herd, Hess = TRUE, nAGQ = 10, dat = dat) 
+           
+            ## check it out
+            summary(topmod2) # Hess = 18295.46 => model not ill-defined (see clmm2 tutorial)
+            confint(topmod2, level = 0.85) # this only gives standard error, prob bc Hessian = T
+             
+    
+            ## predict probability of falling into each response category given those same data
+            predprob <- predict(topmod2, newdata = dupedat)
+            
+                ## sanity check, both should = 1
+                sum(predprob[1]+predprob[2]+predprob[3])
+                sum(predprob[4]+predprob[5]+predprob[6])
+    
+    
+            ## combine predictions with data used to predict
+            newdat <- cbind(dupedat, predprob)
+            head(newdat)
+    
+            
+            
+        ## plot predictions ##
+            
+            
+            ## pull random subsample of 10000 predictions (takes forEVer otherwise)
+            subdat <- newdat[sample(nrow(newdat), 10000),] 
+
+            
+            ## predFor
+            pp.pf <- ggplot(subdat, aes(x = predFor, y = predprob, colour = behavO)) +
+              geom_smooth() +
+              scale_color_hue(name = "", labels = c("Resident", "Intermediate", "Migrant")) +
+              labs(x = "Forage predictabilty \n (- 6-yr stdev of NDVI amplitude)", y = "Probability") +
+              theme(text = element_text(size=15), plot.title = element_text(hjust = 0.5))
+
+            ## deltaFor on Ag
+            pp.df <- ggplot(subdat[subdat$irrig == 1,], aes(x = deltaFor, y = predprob, colour = behavO)) +
+              geom_smooth() +
+              scale_color_hue(name = "", labels = c("Resident", "Intermediate", "Migrant")) +
+              labs(x = "Forage difference \n (maxNDVI outside - inside winter range)", y = "Probability",
+                title = "Agriculture on winter range") +
+              theme(text = element_text(size=15), plot.title = element_text(hjust = 0.5))
+         
+            
+            
+        ## export ##
+            
+        ggsave("./Plots/predFor-prdxns.jpg", 
+             plot = pp.pf, 
+             device = "jpeg",
+             dpi = 300)   
+        
+        
+        ggsave("./Plots/deltaFor-prdxns.jpg", 
+             plot = pp.df, 
+             device = "jpeg",
+             dpi = 300)         
+        
+            
+    #### Coefficient estimates - Averaged model ####     
+        
+
+        ## extract relevant model info
+        coefAvg <- round(coef(avgmod), 2)
+        ciAvg95 <- round(confint(avgmod, level = 0.95), 2)
+        ciAvg85 <- round(confint(avgmod, level = 0.85), 2)    
+        
+        ## make dataframe of relevant info
+        avgdf <- data.frame(
+          OR = coefAvg,
+          ciLow95 = ciAvg95[,1],
+          ciHigh95 = ciAvg95[,2],
+          ciLow85 = ciAvg85[,1],
+          ciHigh85 = ciAvg85[,2]) %>%
+          tibble::rownames_to_column() %>%
+          rename(cov = rowname) %>%
+          filter(!grepl("other", cov)) 
+          
+        
+        ## plot without densOwn (huge CI messes up scale)
+        ggplot(avgdf[avgdf$cov != "densOwnCtr",], 
+          aes(y = OR, x = cov, ymin = ciLow85, ymax = ciHigh85)) +
+          geom_point(size = 3) +
+          geom_errorbar(width = 0.1) +
+          geom_hline(yintercept = 0, linetype = "dotted") +
+          labs(y = "coef", x = "")
+        
+        
+        ## pull out just the interesting things
+        avgsub <- avgdf %>%
+          filter(cov == "densCtr" | cov == "densCtr:irrigCtr" |
+              cov == "deltaForCtr" | cov == "deltaForCtr:irrigCtr") 
+        # dplyr hates me so i'm doing this an awful way
+        avgsub[1,1] <- "Density"
+        avgsub[2,1] <- "Density with Ag"
+        avgsub[3,1] <- "Forage Difference"
+        avgsub[4,1] <- "Forage Diff with Ag"
+        lvs <- c("Density", "Density with Ag", "Forage Difference", "Forage Diff with Ag")
+        avgsub$cov <- factor(avgsub$cov, levels = lvs)
+        
+        ## plot the interesting things
+        densag <- ggplot(avgsub[grepl("Dens", avgsub$cov),], 
+          aes(y = OR, x = cov, ymin = ciLow85, ymax = ciHigh85)) +
+          geom_point(size = 3) +
+          geom_errorbar(width = 0.1) +
+          geom_hline(yintercept = 0) +
+          labs(title = "Conspecific density", y = "Coefficient", x = "") +
+          theme(text = element_text(size=15), plot.title = element_text(hjust = 0.5)) +
+          ylim(-0.07, 0.275) +
+          scale_x_discrete(labels=c("Density" = "Influence alone", 
+            "Density with Ag" = "Influence with Ag"))
+        forag <- ggplot(avgsub[grepl("For", avgsub$cov),], 
+          aes(y = OR, x = cov, ymin = ciLow85, ymax = ciHigh85)) +
+          geom_point(size = 3) +
+          geom_errorbar(width = 0.1) +
+          geom_hline(yintercept = 0) +
+          labs(title = "Difference in forage", y = "", x = "") +
+          theme(text = element_text(size=15), plot.title = element_text(hjust = 0.5)) +
+          ylim(-0.07, 0.275) +
+          scale_x_discrete(labels=c("Forage Difference" = "Influence alone", 
+            "Forage Diff with Ag" = "Influence with Ag"))
+        ags <- grid.arrange(densag, forag, ncol = 2) 
+        
+        
+        ## export ##
+        ggsave("./Plots/ag-intrxns.jpg", 
+             plot = ags, 
+             device = "jpeg",
+             dpi = 300)        
+              
+        
+
+        
+        
+        
+        
+        
+        
+#### [save all the things] ####         
+           
+  save.image("mig.Rdata")   
       
 
