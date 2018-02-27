@@ -379,9 +379,8 @@
             mutate(Reclass = ifelse(Model == "resident" & delta > 900, "migrant", Model)) %>%
             # if animal "dispersed" or "migrated" <6.7 km, reclassify as Resident
             mutate(Reclass = ifelse(Reclass == "disperser" &  delta < 45 | Reclass == "migrant" &  delta < 45, "resident", Reclass)) %>%
-            # if animal "migrated" 6.8-8.7km, reclassify as Other
+            # if animal "migrated" < 8.7km or "resided" within > 6.7km, reclassify as Other
             mutate(Reclass = ifelse(Reclass == "migrant" & delta < 75, "other", Reclass)) %>%
-            # similarly, if animal "resided" within 6.8-8.7km, reclassify as Other
             mutate(Reclass = ifelse(Reclass == "resident" & delta > 45, "other", Reclass)) %>%  
             # rename dispersers as Other
             mutate(Reclass = ifelse(Reclass == "disperser", "other", Reclass)) %>%
