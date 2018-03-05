@@ -216,7 +216,8 @@
       data(Transport)
       
       # make resident the baseline level
-      dat$Behav <- relevel(dat$Behav, ref = "resident")
+      olddat$Behav <- relevel(olddat$Behav, ref = "resident")
+      olddat <- droplevels(olddat)
           
       # first just try the same base model with no random effect
       summary(mblogit(Behav ~ PredForTi + deltaFor, data = dat))
@@ -227,44 +228,74 @@
       # cool, numbers are the same
       
       # now add random effect of herd
-      summary(mblogit(Behav ~ PredForTi + deltaFor, data = dat, random = ~1|Herd))
-      #didn't converge but did give output
+      summary(mblogit(Behav ~ predFor + deltaFor, data = dat, random = ~1|Herd),
+        control = list(maxit = 150))
+      # this somehow works
       
-      
-      ### KRISTIN YOU LEFT OFF MODELING HERE ####
-      ## mclogit could be promising for a quick solution
-      ## although it has convergence issues you need to figure out
-      ## specifically it "cannot find an appropriate step size"
-      ## but it's just a warning not an error so not sure how big an issue
-      
-      
-      # below this not fixed to use delta max NDVI
-      
-      
-      # # use mblogit to look at forage with random effect of herd included
-      # 
-      #   testdat$Behav <- relevel(testdat$Behav, ref = "resident")
-      #   testdat$Old <- as.factor(testdat$Old)
-      # 
-      #   # looking at all possible forage models for funzies
-      #   mods.for <- list()
-      #   modnms <- c("PredAmp", "DeltaAmp", "AllForAmp", "PredTi", "DeltaTi", "AllForTi")
-      #   mods.for[[1]] <- mblogit(Behav ~ rsPredForAmp, data = testdat, random = ~1|Herd)
-      #   mods.for[[2]] <- mblogit(Behav ~ rsDeltaAmp, data = testdat, random = ~1|Herd)
-      #   mods.for[[3]] <- mblogit(Behav ~ rsPredForAmp + rsDeltaAmp, data = testdat, random = ~1|Herd)
-      #   mods.for[[4]] <- mblogit(Behav ~ rsPredForTi, data = testdat, random = ~1|Herd)
-      #   mods.for[[5]] <- mblogit(Behav ~ rsDeltaTi, data = testdat, random = ~1|Herd)
-      #   mods.for[[6]] <- mblogit(Behav ~ rsPredForTi + rsDeltaTi, data = testdat, random = ~1|Herd)
-      #   
-      #   mods.for[[1]]$deviance
-      #   mods.for[[2]]$deviance
-      #   mods.for[[3]]$deviance
-      #   mods.for[[4]]$deviance
-      #   mods.for[[5]]$deviance
-      #   mods.for[[6]]$deviance
+      mblogit(Behav ~ predFor + deltaFor, data = dat, random = ~1|Herd) # converged
+      mblogit(Behav ~ predFor + deltaFor, data = olddat, random = ~1|Herd) # didn't converge
+      mblogit(Behav ~ predFor + deltaFor, data = dat, random = ~1|Herd, control = mclogit.control(maxit = 50)) # works
+      mblogit(Behav ~ predFor + deltaFor, data = olddat, random = ~1|Herd, control = mclogit.control(maxit = 150)) # didn't converge
+      mblogit(Behav ~ predFor + deltaFor, data = dat, random = ~1|Herd, subset = !is.na(Old)) # didn't converge
+      mblogit(Behav ~ predFor + deltaFor, data = olddat, random = ~1|Herd, control = mclogit.control(maxit = 999))
+      mblogit(Behav ~ predFor, data = olddat) # works
+      mblogit(Behav ~ deltaFor, data = olddat) # works
+      mblogit(Behav ~ predFor + deltaFor, data = olddat) # works
+      mblogit(Behav ~ predFor + deltaFor, random = ~1|Herd, data = olddat) # fails. it's the random effect.  
 
-   ## mclogit help says it can only support random intercept, not random slope
 
+      
+      tm1 <- mblogit(Behav ~ deltaFor, dat = olddat)
+      tm2 <- mblogit(Behav ~ predFor + deltaFor, dat = olddat)
+      tm3 <- mblogit(Behav ~ predFor + deltaFor + deltaFor:predFor, dat = olddat)
+      tm4 <- mblogit(Behav ~ predFor + deltaFor + Dens, dat = olddat)
+      tm5 <- mblogit(Behav ~ predFor + deltaFor + Dens + deltaFor:Dens, dat = olddat)
+      tm6 <- mblogit(Behav ~ predFor + deltaFor + Old, dat = olddat)
+      tm7 <- mblogit(Behav ~ predFor + deltaFor + Old + deltaFor:Old, dat = olddat)
+      tm8 <- mblogit(Behav ~ predFor + deltaFor + Old + Dens, dat = olddat)
+      tm9 <- mblogit(Behav ~ predFor + deltaFor + Old + Dens + Old:Dens, dat = olddat)
+      tm10 <- mblogit(Behav ~ densOwn, dat = olddat)
+      tm11 <- mblogit(Behav ~ predFor + deltaFor + densOwn, dat = olddat)
+      tm12 <- mblogit(Behav ~ predFor + deltaFor + densOwn + deltaFor:predFor, dat = olddat)
+      tm13 <- mblogit(Behav ~ predFor + deltaFor + densOwn + deltaFor:densOwn, dat = olddat)
+      tm14 <- mblogit(Behav ~ densOwn + Old + densOwn:Old, dat = olddat)
+      tm15 <- mblogit(Behav ~ predFor + deltaFor + densOwn + Old + densOwn:Old, dat = olddat)
+      tm16 <- mblogit(Behav ~ irrig, dat = olddat)
+      tm17 <- mblogit(Behav ~ densOwn + irrig, dat = olddat)
+      tm18 <- mblogit(Behav ~ predFor + deltaFor + irrig  , dat = olddat)
+      tm19 <- mblogit(Behav ~ predFor + deltaFor + irrig + deltaFor:irrig, dat = olddat)  
+      tm20 <- mblogit(Behav ~ predFor + deltaFor + irrig + predFor:irrig, dat = olddat)
+      tm21 <- mblogit(Behav ~ irrig + Dens + irrig:Dens, dat = olddat)
+      tm22 <- mblogit(Behav ~ predFor + irrig + Dens + irrig:Dens, dat = olddat)  
+      tm23 <- mblogit(Behav ~ predFor + irrig + Old + Dens + Old:Dens, dat = olddat)  
+      tm24 <- mblogit(Behav ~ densOwn + irrig + Dens + irrig:Dens, dat = olddat)
+      tm25 <- mblogit(Behav ~ densOwn + irrig + Dens + densOwn:Dens, dat = olddat) 
+      tm26 <- mblogit(Behav ~ predFor + irrig + densOwn + irrig:densOwn, dat = olddat) 
+      
+      
+      # compete with AICc #
+      tmods <- list()
+      tmodnms <- paste0("tm", rep(1:26))
+      for (i in 1:length(tmodnms)) { tmods[[i]] <- get(tmodnms[[i]]) }
+      # oh of fucking course aic doesn't work with these models
+      
+      
+
+
+      
+      
+      install.packages("mixcat")
+      
+      library(mixcat)
+      npmlt(dat$Behav ~ dat$deltaFor)
+      npmlt(dat$Behav ~ dat$predFor) # christ, it can't even do this right
+      npmlt(dat$Behav ~ dat$deltaFor, random = ~1+dat$Herd)
+      npmlt(dat$Behav ~ dat$predFor + dat$deltaFor, random = ~1+dat$Herd)
+
+      
+      
+      
+      
     
 ### ### ### ### ### ### ### ### ### ### ### ###
 #### | TRYING DIFFERENT MODELING OPTIONS | ####      
@@ -1570,7 +1601,7 @@
       
       library(lme4)
       
-      testdat <- moddat %>%
+      testdat <- dat %>%
         mutate(Mig = ifelse(Behav == "migrant", 1, 0)) 
 
       
@@ -1602,12 +1633,12 @@
       t26 <- glmer(Mig ~ predFor + irrig + densOwn + (irrig*densOwn) + (1|Herd), family = binomial(link = logit), dat = testdat) 
 
       # compete with AICc #
-      mods <- list()
-      modnms <- paste0("t", rep(1:26))
-      for (i in 1:length(modnms)) { mods[[i]] <- get(modnms[[i]]) }
-      aictab(cand.set = mods, modnames = modnms)
-      aictab <- data.frame(aictab(cand.set = mods, modnames = modnms))
-      aictab.prMig <- aictab
+      tmods <- list()
+      tmodnms <- paste0("t", rep(1:26))
+      for (i in 1:length(tmodnms)) { tmods[[i]] <- get(tmodnms[[i]]) }
+      aictab(cand.set = tmods, modnames = tmodnms)
+      aictab.prMig <- data.frame(aictab(cand.set = mods, modnames = modnms))
+
       
       
       # found support for essentially the same models
@@ -1669,7 +1700,7 @@
       ord.re <- order(m19$ranef)
       ci <- ci[order(m19$ranef),]
       # and order herds to match their index numbers
-      herdnums <- data.frame(Herd = unique(moddat$Herd), herdNum = 1:16)
+      herdnums <- data.frame(Herd = unique(dat$Herd), herdNum = 1:16)
       herdnums <- herdnums[match(ord.re, herdnums$herdNum),]
       #plot estimates
       plot(1:16, m19$ranef[ord.re], axes = FALSE, ylim = range(ci),
@@ -2542,6 +2573,18 @@
       
       
       
+  #### just for funzies... quadratic predfor?? ####
+      
+      quaddat <- dat %>%
+        mutate(predFor2 = predFor^2)
+      
+      hm1 <- clmm(behavO ~ predFor + predFor2 + deltaFor + irrig + deltaFor:irrig + (1|Herd),
+        dat = quaddat, Hess = TRUE, nAGQ = 7)
+      summary(hm1)
+      # nah, worse LL and AIC than before
+      
+      
+      
       
 #### trying to figure out diagnostics ####
       
@@ -2787,45 +2830,150 @@ sf <- function(y) {
           # so we're gonna hack the shit out of it, hopefully
           
           
-
+      
+### ### ### ### ### #
+#### |MODEL FIT| ####
+### ### ### ### ### #
+        
+        
+    library(generalhoslem)
+        
+    # define model without random effect of herd (tests can't handle mixed effects)
+    # note: model without the random effect fits data worse than the one with it, so...
+    mod.clm <- clm(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, data = dat)  
+    
+    
+    
+    
+    #### TEST 1 : Lipsitz ####
+    
+    lipsitz.test(mod.clm) # p-val = 1.263e-5, ROUGH. does have some warnings...
+    
+    
+    
+    #### TEST 2 : Modified Hosmer-Lemeshow ####
+        
+    
+        ## with the clm version ##
+        
+            predprobclm <- data.frame(
+              predFor = dat$predFor, 
+              deltaFor = dat$deltaFor,
+              irrig = dat$irrig)
+            fv <- predict(mod.clm, newdata = predprobclm)$fit
+            logitgof(dat$behavO, fv, g = 10, ord = TRUE) # p = 0.0005, STILL ROUGH
+ 
+            
+        ## trick it into looking at the clmm instead of clm? ##
+        
+          # predict with original behaviors
+          testdat1 <- dat %>%
+            dplyr::select(behavO, deltaFor, predFor, irrig)
+          testpred1 <- predict(mod2, newdata = testdat1)
+          pred1 <- cbind(testdat1, testpred1) %>%
+            rename(c("behavO" = "behavior", "testpred1" = "prediction")) %>%
+            dplyr::select(behavior, prediction) %>%
+            mutate(resident = ifelse(behavior == "resident", prediction, NA),
+              other = ifelse(behavior == "other", prediction, NA),
+              migrant = ifelse(behavior == "migrant", prediction, NA)) %>%
+            dplyr::select(-c(behavior, prediction))
+          
+          # predict using other instead of resident, resident instead of migrant, migrant instead of other
+          testdat2 <- dat %>%
+            dplyr::select(behavO, deltaFor, predFor, irrig) %>%
+            mutate(behav = ifelse(behavO == "resident", "other",
+              ifelse(behavO == "migrant", "resident", "migrant"))) %>%
+            dplyr::select(-behavO)
+          testdat2$behavO <- factor(testdat2$behav, levels = c("resident", "other", "migrant"), ordered = TRUE)
+          testpred2 <- predict(mod2, newdata = testdat2)
+          pred2 <- cbind(testdat2, testpred2) %>%
+            rename(c("behavO" = "behavior", "testpred2" = "prediction")) %>%
+            dplyr::select(behavior, prediction) %>%
+            mutate(resident = ifelse(behavior == "resident", prediction, NA),
+              other = ifelse(behavior == "other", prediction, NA),
+              migrant = ifelse(behavior == "migrant", prediction, NA)) %>%
+            dplyr::select(-c(behavior, prediction))
+          
+          
+          # predict final behav option
+          testdat3 <- dat %>%
+            dplyr::select(behavO, deltaFor, predFor, irrig) %>%
+            mutate(behav = ifelse(behavO == "resident", "migrant",
+              ifelse(behavO == "other", "resident", "other"))) %>%
+            dplyr::select(-behavO)
+          testdat3$behavO <- factor(testdat3$behav, levels = c("resident", "other", "migrant"), ordered = TRUE)
+          testpred3 <- predict(mod2, newdata = testdat3)
+          pred3 <- cbind(testdat3, testpred3) %>%
+            rename(c("behavO" = "behavior", "testpred3" = "prediction")) %>%
+            dplyr::select(behavior, prediction) %>%
+            mutate(resident = ifelse(behavior == "resident", prediction, NA),
+              other = ifelse(behavior == "other", prediction, NA),
+              migrant = ifelse(behavior == "migrant", prediction, NA)) %>%
+            dplyr::select(-c(behavior, prediction))
+    
+          # combine 
+          preds <- coalesce(pred1, pred2, pred3)
+          
+          # and make it a numeric matrix
+          predmat <- matrix(nrow = nrow(dat), ncol = length(unique(dat$behavO)))
+          attributes(predmat)$dimnames[[1]] <- (1:308)
+          attributes(predmat)$dimnames[[2]] <- c("resident", "other", "migrant")
+          
+          # pathetically combine predictions in numeric matrix 
+          predmat[1 : nrow(preds)] <- preds$resident
+          predmat[(nrow(preds)+1) : (nrow(preds)*2)] <- preds$other
+          predmat[((nrow(preds)*2)+1) : (nrow(preds)*3)] <- preds$migrant
+          
+          # gof test
+          logitgof(dat$behavO, predmat, g = 10, ord = TRUE) # even more significant, which i don't understand
+              # BUT warning: at least 1 cell in expected frequencies table is <1. Chi-sq approximation may be wrong
+          
+          
+          
+      #### TEST 3 : Pulkstenic-Robinson ####
+        
+        pulkrob.chisq(mod.clm, catvars = c("irrig")) # p = 0.6491
+        pulkrob.deviance(mod.clm, c("irrig")) # p = 0.6125
 
     #### rerunning model selection with glmer instead, sadly ####
       
+      library(lme4) # this blocks ranef and varCorr from ordinal
+          
+          
           testdat <- dat %>%
             mutate(Mig = as.factor(ifelse(Behav == "migrant", 1, 0))) %>%
             filter(!is.na(Old)) %>%
-            mutate(lDens = log(Dens))
+            mutate(lDens = log(Dens)) 
           
       #### define a priori models ####
       
-      tm1 <- glmer(Mig ~ deltaFor + (1|Herd), family = binomial(logit), dat = testdat)
-      tm2 <- glmer(Mig ~ predFor + deltaFor + (1|Herd), family = binomial(logit), dat = testdat)
-      tm3 <- glmer(Mig ~ predFor + deltaFor + deltaFor:predFor + (1|Herd), family = binomial(logit), dat = testdat)
-      tm4 <- glmer(Mig ~ predFor + deltaFor + lDens + (1|Herd), family = binomial(logit), dat = testdat) 
-      tm5 <- glmer(Mig ~ predFor + deltaFor + lDens + deltaFor:lDens + (1|Herd), family = binomial(logit), dat = testdat)
-      tm6 <- glmer(Mig ~ predFor + deltaFor + Old + (1|Herd), family = binomial(logit), dat = testdat)
-      tm7 <- glmer(Mig ~ predFor + deltaFor + Old + deltaFor:Old + (1|Herd), family = binomial(logit), dat = testdat) 
-      tm8 <- glmer(Mig ~ predFor + deltaFor + Old + lDens + (1|Herd), family = binomial(logit), dat = testdat) 
-      tm9 <- glmer(Mig ~ predFor + deltaFor + Old + lDens + Old:lDens + (1|Herd), family = binomial(logit), dat = testdat)
-      tm10 <- glmer(Mig ~ densOwn + (1|Herd), family = binomial(logit), dat = testdat)
-      tm11 <- glmer(Mig ~ predFor + deltaFor + densOwn + (1|Herd), family = binomial(logit), dat = testdat)
-      tm12 <- glmer(Mig ~ predFor + deltaFor + densOwn + deltaFor:predFor + (1|Herd), family = binomial(logit), dat = testdat)
-      tm13 <- glmer(Mig ~ predFor + deltaFor + densOwn + deltaFor:densOwn + (1|Herd), family = binomial(logit), dat = testdat)
-      tm14 <- glmer(Mig ~ densOwn + Old + densOwn:Old + (1|Herd), family = binomial(logit), dat = testdat)
-      tm15 <- glmer(Mig ~ predFor + deltaFor + densOwn + Old + densOwn:Old + (1|Herd), family = binomial(logit), dat = testdat)
-      tm16 <- glmer(Mig ~ irrig + (1|Herd), family = binomial(logit), dat = testdat)
-      tm17 <- glmer(Mig ~ densOwn + irrig + (1|Herd), family = binomial(logit), dat = testdat)
-      tm18 <- glmer(Mig ~ predFor + deltaFor + irrig   + (1|Herd), family = binomial(logit), dat = testdat)
-      tm19 <- glmer(Mig ~ predFor + deltaFor + irrig + deltaFor:irrig + (1|Herd), family = binomial(logit), dat = testdat)  
-      tm20 <- glmer(Mig ~ predFor + deltaFor + irrig + predFor:irrig + (1|Herd), family = binomial(logit), dat = testdat)
-      tm21 <- glmer(Mig ~ irrig + Dens + irrig:Dens + (1|Herd), family = binomial(logit), dat = testdat)
-      tm22 <- glmer(Mig ~ predFor + irrig + lDens + irrig:lDens + (1|Herd), family = binomial(logit), dat = testdat)  
-      tm23 <- glmer(Mig ~ predFor + irrig + Old + Dens + Old:Dens + (1|Herd), family = binomial(logit), dat = testdat)  
-      tm24 <- glmer(Mig ~ densOwn + irrig + Dens + irrig:Dens + (1|Herd), family = binomial(logit), dat = testdat)
-      tm25 <- glmer(Mig ~ densOwn + irrig + Dens + densOwn:Dens + (1|Herd), family = binomial(logit), dat = testdat) 
-      tm26 <- glmer(Mig ~ predFor + irrig + densOwn + irrig:densOwn + (1|Herd), family = binomial(logit), dat = testdat) 
-      # convergence failures: 4, 5, 7, 12
-      
+      tm1 <- glmer(Mig ~ deltaFor + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm2 <- glmer(Mig ~ predFor + deltaFor + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm3 <- glmer(Mig ~ predFor + deltaFor + deltaFor:predFor + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm4 <- glmer(Mig ~ predFor + deltaFor + lDens + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat) 
+      tm5 <- glmer(Mig ~ predFor + deltaFor + lDens + deltaFor:lDens + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm6 <- glmer(Mig ~ predFor + deltaFor + Old + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm7 <- glmer(Mig ~ predFor + deltaFor + Old + deltaFor:Old + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat) 
+      tm8 <- glmer(Mig ~ predFor + deltaFor + Old + lDens + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat) 
+      tm9 <- glmer(Mig ~ predFor + deltaFor + Old + lDens + Old:lDens + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm10 <- glmer(Mig ~ densOwn + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm11 <- glmer(Mig ~ predFor + deltaFor + densOwn + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm12 <- glmer(Mig ~ predFor + deltaFor + densOwn + deltaFor:predFor + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm13 <- glmer(Mig ~ predFor + deltaFor + densOwn + deltaFor:densOwn + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm14 <- glmer(Mig ~ densOwn + Old + densOwn:Old + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm15 <- glmer(Mig ~ predFor + deltaFor + densOwn + Old + densOwn:Old + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm16 <- glmer(Mig ~ irrig + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm17 <- glmer(Mig ~ densOwn + irrig + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm18 <- glmer(Mig ~ predFor + deltaFor + irrig   + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm19 <- glmer(Mig ~ predFor + deltaFor + irrig + deltaFor:irrig + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)  
+      tm20 <- glmer(Mig ~ predFor + deltaFor + irrig + predFor:irrig + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm21 <- glmer(Mig ~ irrig + Dens + irrig:Dens + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm22 <- glmer(Mig ~ predFor + irrig + lDens + irrig:lDens + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)  
+      tm23 <- glmer(Mig ~ predFor + irrig + Old + Dens + Old:Dens + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)  
+      tm24 <- glmer(Mig ~ densOwn + irrig + Dens + irrig:Dens + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat)
+      tm25 <- glmer(Mig ~ densOwn + irrig + Dens + densOwn:Dens + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat) 
+      tm26 <- glmer(Mig ~ predFor + irrig + densOwn + irrig:densOwn + (1|Herd), family = binomial(logit), nAGQ = 7, dat = testdat) 
+
       
       # compete with AICc #
       tmods <- list()
@@ -2833,9 +2981,131 @@ sf <- function(y) {
       for (i in 1:length(tmodnms)) { tmods[[i]] <- get(tmodnms[[i]]) }
       aictab(cand.set = tmods, modnames = tmodnms)
       taictab <- data.frame(aictab(cand.set = tmods, modnames = tmodnms))
+      write.csv(taictab, file = "aic-prMig.csv", row.names = F)
       
+      # center covariates to allow model averagin
+      ctrdat2 <- testdat %>%
+        mutate(predForCtr = predFor - mean(predFor),
+               deltaForCtr = deltaFor - mean(deltaFor),
+               irrigCtr = as.numeric(irrig) - mean(as.numeric(irrig)),
+               lDensCtr = lDens - mean(lDens),
+               oldCtr = as.numeric(Old) - mean(as.numeric(Old)),
+               densOwnCtr = densOwn - mean(densOwn))
       
+      # define models using centered covariates
+      tm15c <- glmer(Mig ~ predForCtr + deltaForCtr + densOwnCtr + oldCtr + densOwnCtr:oldCtr + (1|Herd), family = binomial(logit), nAGQ = 7, dat = ctrdat2)
+      tm6c <- glmer(Mig ~ predForCtr + deltaForCtr + oldCtr + (1|Herd), family = binomial(logit), nAGQ = 7, dat = ctrdat2)
+      tm2c <- glmer(Mig ~ predForCtr + deltaForCtr + (1|Herd), family = binomial(logit), nAGQ = 7, dat = ctrdat2)
+      tm11c <- glmer(Mig ~ predForCtr + deltaForCtr + densOwnCtr + (1|Herd), family = binomial(logit), nAGQ = 7, dat = ctrdat2)
+      tm19c <- glmer(Mig ~ predForCtr + deltaForCtr + irrigCtr + deltaForCtr:irrigCtr + (1|Herd), family = binomial(logit), nAGQ = 7, dat = ctrdat2)  
+      tm3c <- glmer(Mig ~ predForCtr + deltaForCtr + deltaForCtr:predForCtr + (1|Herd), family = binomial(logit), nAGQ = 7, dat = ctrdat2)
+      tm4c <- glmer(Mig ~ predForCtr + deltaForCtr + lDensCtr + (1|Herd), family = binomial(logit), nAGQ = 7, dat = ctrdat2) 
+      tm5c <- glmer(Mig ~ predForCtr + deltaForCtr + lDensCtr + deltaForCtr:lDensCtr + (1|Herd), family = binomial(logit), nAGQ = 7, dat = ctrdat2)
+      tm8c <- glmer(Mig ~ predForCtr + deltaForCtr + oldCtr + lDensCtr + (1|Herd), family = binomial(logit), nAGQ = 7, dat = ctrdat2) 
+
       
+      #### average the models ####
+        tavgmod <- model.avg(tm15c, tm6c, tm2c, tm11c, tm19c, tm3c, tm5c, tm8c, tm4c) 
+        summary(tavgmod)
+        # write.csv(round(confint(tavgmod, level = 0.85), 2), "testres.csv")
+        
+        
+      #### look at each model individually ####
+        
+        summary(tm15)
+        round(confint(tm15, level = 0.85, parm="beta_",method="Wald"), 2)
+        
+        summary(tm6)
+        round(confint(tm6, level = 0.85, parm="beta_",method="Wald"), 2)
+
+        summary(tm152)
+        round(confint(tm2, level = 0.85, parm="beta_",method="Wald"), 2)
+
+        summary(tm11)
+        round(confint(tm11, level = 0.85, parm="beta_",method="Wald"), 2)
+
+        summary(tm3)
+        round(confint(tm3, level = 0.85, parm="beta_",method="Wald"), 2)
+
+        summary(tm5)
+        round(confint(tm5, level = 0.85, parm="beta_",method="Wald"), 2)
+
+        summary(tm8)
+        round(confint(tm8, level = 0.85, parm="beta_",method="Wald"), 2)
+
+        summary(tm4)
+        round(confint(tm4, level = 0.85, parm="beta_",method="Wald"), 2)
+        
+        
+        
+    #### quick prelim check of predictive accurary    
+        
+        t <- predict(tavgmod, ctrdat2, type = "response")
+        testpreds <- cbind(ctrdat2, t) %>%
+          rename(predProb = t) %>%
+          mutate(predMig = ifelse(predProb > 0.49, 1, 0)) %>%
+          mutate(predCorrect = ifelse(predMig == 1 & behavO == "migrant", 1, 0))
+        length(which(testpreds$predCorrect == 1)) / nrow(testpreds)
+        summary(t)
+        # this only predicts correctly 53% of the time, worse than my ordinal model
+        
+        # try one more again with that top-selected model
+        t2 <- predict(tm15, testdat, type = "response")
+        testpreds2 <- cbind(testdat, t2) %>%
+          rename(predProb = t2) %>%
+          mutate(predMig = ifelse(predProb > 0.49, 1, 0)) %>%
+          mutate(predCorrect = ifelse(predMig == 1 & behavO == "migrant", 1, 0))
+        length(which(testpreds2$predCorrect == 1)) / nrow(testpreds2) 
+        summary(t2)
+        # and this is also only 53%, interesting
+        
+        
+        # ok so how about model fit (explanatory vs predictive power)
+        
+        predlog <- cbind(ctrdat2, t) %>%
+          rename(predProb = t) %>%
+          # partition into 10 groups based on predicted probability
+          mutate(g = factor(findInterval(predProb, 
+            quantile(predProb, probs = c((0:9)/10))))) %>%
+          # calculate observed and expected obs per group
+          group_by(g) %>%
+          summarise(
+            obs = length(which(Mig == 1)) / n(),
+            exp = mean(predProb)) %>%
+          mutate(oe = (obs - exp)^2 / exp)
+        
+        chistat <- sum(predlog$oe)
+        maybedof <- 10-2 # number of deciles - 2?
+        
+        pchisq(chistat, maybedof) # oh that is just horrendous
+
+        
+        
+        
+        # and "top" model, for funzies
+
+        killme <- cbind(testdat, fitted(tm15)) %>%
+          rename(predProb = "fitted(tm15)") %>%
+          # partition into 10 groups based on predicted probability
+          mutate(g = factor(findInterval(predProb, 
+            quantile(predProb, probs = c((0:9)/10))))) %>%
+          # calculate observed and expected obs per group
+          group_by(g) %>%
+          summarise(
+            obs = length(which(Mig == 1)) / n(),
+            exp = mean(predProb)) %>%
+          mutate(oe = (obs - exp)^2 / exp)
+        chiagain <- sum(killme$oe)
+        pchisq(chiagain, maybedof) # just-- just no.
+        
+        hoslem.test(testdat$Mig, fitted(tm15), g = 10)
+        # the good news is i correctly figured out the df
+        # the bad news is this model fucking blows
+                  
+        
+        
+        
+        
   #### chi-square/deviance stuff from ordinal clm intro ####
       
       # first get likelihood of a full model (has parameter for each obs)
@@ -2868,17 +3138,194 @@ sf <- function(y) {
       
       
       
-      
-  #### just for funzies... quadratic predfor?? ####
-      
-      quaddat <- dat %>%
-        mutate(predFor2 = predFor^2)
-      
-      hm1 <- clmm(behavO ~ predFor + predFor2 + deltaFor + irrig + deltaFor:irrig + (1|Herd),
-        dat = quaddat, Hess = TRUE, nAGQ = 7)
-      summary(hm1)
-      # nah, worse LL and AIC than before
+    #### mess-ups when trying for the fagerland hosmer approach
       
       
       
+        preddat$decile <- with(preddat, factor(
+          findInterval(si, c(-Inf,
+            quantile(si, probs = c((0:9)/10), Inf), rightmost.closed = TRUE,
+            labels = 1:10))))
+        # returns 2:12
+        
+        
+        preddat$decile = with(preddat, cut(si,
+          breaks = quantile(si, probs = seq(0, 1, by = 0.1)), include.lowest = TRUE))
+        preddat$decile <- factor(preddat$decile, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))
+        # returns NAs
+                
       
+      
+        
+        # using df with predicted prob of each behav for each obs
+        chidat <- hm %>%
+          # rename columns for clarity
+          rename(pi1 = resident, pi2 = other, pi3 = migrant) %>%
+          # calculate ordinal score per obs
+          mutate(si = pi1 + 2*pi2) %>%
+          # partition into 10 groups based on ordinal score
+          mutate(g = factor(findInterval(si, 
+            quantile(si, probs = c((0:9)/10))))) %>%
+          # calculate observed and expected obs per group
+          group_by(g) %>%
+          summarise(
+            obsRes = length(which(actualBehav == "resident")),
+            obsInt = length(which(actualBehav == "other")), 
+            expRes = length(which(predBehav == "resident")),
+            expInt = length(which(predBehav == "other")))
+        # not enough counts in groups...
+        
+        
+                
+        # does using fewer groups help?
+        
+        # using df with predicted prob of each behav for each obs
+        faghos2 <- hm %>%
+          # rename columns for clarity
+          rename(pi1 = resident, pi2 = other, pi3 = migrant) %>%
+          # calculate ordinal score per obs (4)
+          mutate(si = pi1 + 2*pi2 + 3*pi3) %>%
+          # partition into 10 groups based on ordinal score
+          mutate(g = factor(findInterval(si, 
+            quantile(si, probs = c((0:4)/5))))) %>%
+          # calculate observed and expected obs per group
+          group_by(g) %>%
+          summarise(
+            obsRes = length(which(actualBehav == "resident")) / n(),
+            expRes = length(which(predBehav == "resident")) / n(),
+            obsInt = length(which(actualBehav == "other")) / n(), 
+            expInt = length(which(predBehav == "other")) / n(),
+            obsMig = length(which(actualBehav == "migrant")) / n(),
+            expMig = length(which(predBehav == "migrant")) / n())
+        # no, duh
+    
+        
+      # these are counts not probs, ooops
+        
+        
+        # using df with predicted prob of each behav for each obs
+        faghos <- hm %>%
+          # rename columns for clarity
+          rename(pi1 = resident, pi2 = other, pi3 = migrant) %>%
+          # calculate ordinal score per obs (4)
+          mutate(si = pi1 + 2*pi2 + 3*pi3) %>%
+          # partition into 10 groups based on ordinal score
+          mutate(g = factor(findInterval(si, 
+            quantile(si, probs = c((0:9)/10))))) %>%
+          # calculate observed and expected obs per group
+          group_by(g) %>%
+          summarise(
+            obsRes = round(length(which(actualBehav == "resident")) / n(), 2),
+            expRes = round(length(which(predBehav == "resident")) / n(), 2),
+            obsInt = round(length(which(actualBehav == "other")) / n(), 2), 
+            expInt = round(length(which(predBehav == "other")) / n(), 2),
+            obsMig = round(length(which(actualBehav == "migrant")) / n(), 2),
+            expMig = round(length(which(predBehav == "migrant")) / n(), 2))
+        write.csv(faghos, "failedgroupings.csv", row.names=F)
+        
+        
+        
+    #### for wild542 ####
+        
+        predobs <- cbind(dat, preds) %>%
+          rename(prRes = resident, prInt = other, prMig = migrant) %>%
+          dplyr::select(AnimalID, Herd, Old, Dens, densOwn, deltaFor, irrig, predFor, behavO,
+            prRes, prInt, prMig)
+        write.csv(predobs, file = "migdat.csv", row.names=F)
+        
+        forclass <- cbind(dat, preds) %>%
+          # only keep columns of interest, and rename some (just for clarity)
+          rename(prRes = resident, prInt = other, prMig = migrant) %>%
+          dplyr::select(AnimalID, Herd, deltaFor, irrig, predFor, behavO, prRes, prInt, prMig) %>%
+          # calculate ordinal score per observation
+          mutate(score = prRes + 2*prInt + 3*prMig) %>%
+          # partition into 10 groups based on ordinal score
+          mutate(g = factor(findInterval(score, 
+            quantile(score, probs = c((0:9)/10)))))
+        write.csv(forclass, file = "scoresgroups.csv", row.names=F)
+      
+      
+
+      
+      
+  #### curious about intermediacy in particular ####
+        
+        # after running chi-sq
+        
+        sum(pulrob$oeInt)
+        ((2 * i.pr) - 1) * (1 - 1) - 1 - 1
+        pchisq( sum(pulrob$oeInt), ((2 * i.pr) - 1) * (1 - 1) - 1 - 1) #NaN, fair enough
+        
+                # calculate degrees of freedom
+        i.pr <- 2 # I = number of covariate patterns
+        j.pr <- 3 # J = number of response categories
+        k.pr <- 1 # k = number of categorical terms
+        dof.pr <- ((2*i.pr) - 1) * (j.pr - 1) - k.pr - 1
+        
+        
+        
+        ## how bout looking at thresholds ##
+        
+        # compare equidistant to flexible thresholds
+          # if not equidistant, intermediacy more similar to one or the other behavior
+        
+        mod.eq <- clmm(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig + (1|Herd),
+          Hess = TRUE, nAGQ = 10, dat = dat,
+                         threshold = "equidistant") 
+        summary(mod.eq)
+        
+        anova(mod, mod.eq)
+        # these are basically the same model, identical LLs, p=1
+        # so conclude evidence that intermediacy may not be more similar
+        # to one behavior type than the other
+        
+        anova(m2c, m22c)
+        
+        
+        
+        
+  ##### okkkk i know this is an awful idea but i wanna see intermediate as the baseline ####
+        
+        
+    #### define a priori models ####
+      
+      testdat <- olddat %>% mutate(behavI = factor(behavO, 
+        levels = c("other", "resident", "migrant"), ordered = TRUE))
+        
+      m1 <- clmm(behavI ~ deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m2 <- clmm(behavI ~ predFor + deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m3 <- clmm(behavI ~ predFor + deltaFor + deltaFor:predFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m4 <- clmm(behavI ~ predFor + deltaFor + Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m5 <- clmm(behavI ~ predFor + deltaFor + Dens + deltaFor:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m6 <- clmm(behavI ~ predFor + deltaFor + Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m7 <- clmm(behavI ~ predFor + deltaFor + Old + deltaFor:Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m8 <- clmm(behavI ~ predFor + deltaFor + Old + Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m9 <- clmm(behavI ~ predFor + deltaFor + Old + Dens + Old:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m10 <- clmm(behavI ~ densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m11 <- clmm(behavI ~ predFor + deltaFor + densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m12 <- clmm(behavI ~ predFor + deltaFor + densOwn + deltaFor:predFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m13 <- clmm(behavI ~ predFor + deltaFor + densOwn + deltaFor:densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m14 <- clmm(behavI ~ densOwn + Old + densOwn:Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m15 <- clmm(behavI ~ predFor + deltaFor + densOwn + Old + densOwn:Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m16 <- clmm(behavI ~ irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m17 <- clmm(behavI ~ densOwn + irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m18 <- clmm(behavI ~ predFor + deltaFor + irrig   + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m19 <- clmm(behavI ~ predFor + deltaFor + irrig + deltaFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)  
+      m20 <- clmm(behavI ~ predFor + deltaFor + irrig + predFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m21 <- clmm(behavI ~ irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m22 <- clmm(behavI ~ predFor + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)  
+      m23 <- clmm(behavI ~ predFor + irrig + Old + Dens + Old:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)  
+      m24 <- clmm(behavI ~ densOwn + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat)
+      m25 <- clmm(behavI ~ densOwn + irrig + Dens + densOwn:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat) 
+      m26 <- clmm(behavI ~ predFor + irrig + densOwn + irrig:densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = testdat) 
+      
+      
+      # compete with AICc #
+      mods <- list()
+      modnms <- paste0("m", rep(1:26))
+      for (i in 1:length(modnms)) { mods[[i]] <- get(modnms[[i]]) }
+      aictab(cand.set = mods, modnames = modnms)
+      aictab <- data.frame(aictab(cand.set = mods, modnames = modnms))
+      View(data.frame(aictab(cand.set = mods, modnames = modnms)))
+             
+       
