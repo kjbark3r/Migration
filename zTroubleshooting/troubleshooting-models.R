@@ -3329,3 +3329,77 @@ sf <- function(y) {
       View(data.frame(aictab(cand.set = mods, modnames = modnms)))
              
        
+    #### test proportional odds assumption - from actual old code ####
+        
+      # Agresti 2002 says this assumption should be based more on the inference you want to draw than
+      # methematical considerations, but out of curiosity... (using models without random herd effect) 
+      poddstest <- clm(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, Hess = TRUE, nAGQ = 10, dat = dat) 
+      nominal_test(poddstest) # nothing significant, suggests meet assumption
+      scale_test(poddstest) # predfor is significant; try scaling by it
+      
+      test <- clmm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, scale = ~predFor, dat = dat)
+      summary(test) # worse LL and AIC than top model; not changing it.
+      
+      
+      
+  #### combining plots with diff y-axes ####
+      
+      ## turns out you can't do that in ggplot, fiiiine ##
+      
+              # plot together with ppn(behav) plot
+        
+        ggplot() +
+          geom_bar(
+            data = poppns, 
+            aes(x = Herd, y = ppn, fill = behav), 
+            stat="identity", position='fill') +
+          geom_point(
+            data = herdeffect,
+            aes(y = Est, x = Herd)) +
+          geom_errorbar(
+            data = herdeffect,
+            width = 0.1,
+            aes(y = Est, x = Herd, ymin = CIlow, ymax = CIhigh)) +
+          geom_hline(yintercept = 0) +
+          labs(x = "", y = "Proportion") +
+          theme(text = element_text(size=15),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.title=element_blank())
+
+        
+      p1 <- ggplot(poppns, aes(x = Herd, ppn, fill = behav)) +
+        geom_bar(stat="identity",position='fill') +
+        labs(x = "", y = "Proportion") +
+        theme(text = element_text(size=15),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.title=element_blank())
+      
+      # no legend (makes combo graph confused)        
+      p1 <- ggplot(poppns, aes(x = Herd, ppn, fill = behav)) +
+        geom_bar(stat="identity",position='fill') +
+        labs(x = "", y = "Proportion") +
+        theme(text = element_text(size=15),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none")
+          
+ 
+          # plot
+         p2 <- ggplot(herdeffect, aes(y = Est, x = Herd,
+            ymin = CIlow, ymax = CIhigh)) +
+            geom_point() +
+              geom_errorbar(width = 0.1) +
+              geom_hline(yintercept = 0) 
+
+         multiplot(p1, p2, cols = 1)
+              
+          # plot
+          ggplot(herddat2, aes(y = Est, x = Herd,
+            ymin = CIlow, ymax = CIhigh)) +
+            geom_point() +
+              geom_errorbar(width = 0.1) +
+              geom_hline(yintercept = 0) +
+            theme(axis.text.x=element_text(angle=90, hjust=1))
+          
+          library(grid)
+          grid.draw(rbind(ggplotGrob(p1), ggplotGrob(p2), size = "last"))
+      
