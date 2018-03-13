@@ -58,6 +58,9 @@
     dat$irrig <- factor(dat$irrig)
     dat$Old <- factor(dat$Old)
     
+    # order popdat herds by ppnMig (for later plotting)
+    popdat$Herd = reorder(popdat$Herd, popdat$ppnMig) 
+    
     
     # create df for indivs with no age estimation 
     olddat <- dplyr::filter(dat, !is.na(Old))
@@ -107,6 +110,22 @@
       hist(sqrt(dat$Dens), main = "sqrt(cons dens)") # worse
       hist((dat$Dens)^(0.3333)) # log still better
       hist(1/log(dat$Dens)) # yeesh
+      
+      
+      # ag access, res and in herd
+      with(dat, 
+        length(which(Behav == "resident" & irrig == 0)) / 
+          length(which(Behav == "resident"))) # 40% res no ag
+      herdag <- dat %>%
+        group_by(Herd) %>%
+        summarize(yAg = sum(as.numeric(as.character(irrig))),
+          nAg = n() - yAg,
+          ppnNag = nAg/n())
+      herdagy <- filter(herdag, yAg != 0)
+      hist(herdagy$ppnNag)
+      with(dat, length(which(Behav == "resident" & irrig == 0))) # n = 25
+      
+
   
       
    #### General plots of univariate relationships ####
@@ -170,7 +189,7 @@
       
 
       
-      #### b) population summaries ####
+      #### b) herd summaries ####
       
       
         herdsums <- read.csv("summaries-herds.csv")
@@ -202,8 +221,31 @@
             iqrRes = IQR(ppnRes),
             minRes = min(ppnRes),
             maxRes = max(ppnRes))
-      
-      
+        
+        
+        herdcovs <- dat %>%
+          group_by(Herd) %>%
+          summarise(
+            nIndivs = n(),
+            deltaForMed = median(deltaFor),
+            deltaForMin = min(deltaFor),
+            deltaForMax = max(deltaFor),
+            deltaForIQR = IQR(deltaFor),
+            # for age, don't count the 10 elk we have no age for
+            oldN = length(which(Old == 1)),
+            oldPpn = length(which(Old == 1)) / (n()-10),
+            # irrig can count everybody
+            irrigN = length(which(irrig == 1)),
+            irrigPpn = length(which(irrig == 1)) / n(),
+            # and human land use suuuuper skewed
+            densOwnMed = median(densOwn),
+            densOwnMin = min(densOwn),
+            densOwnMax = max(densOwn),
+            densOwnIQR = IQR(densOwn))    
+        write.csv(herdcovs, file = "summaries-herdcovs.csv", row.names=F)
+        
+        
+        
       
       #### c) behavior type summaries ####
         
@@ -214,6 +256,8 @@
         behavsums <- dat %>%
           group_by(behavO) %>%
           summarise(
+            n = n(),
+            ppn = n/nrow(dat),
             predForAvg = mean(predFor),
             predForSd = sd(predFor),
             predFormin = min(predFor),
@@ -224,7 +268,7 @@
             deltaForMax = max(deltaFor),
             deltaForIQR = IQR(deltaFor),
             # for age, don't count the 10 elk we have no age for
-            oldN = length(which(Old == 1)),
+            oldY = length(which(Old == 1)),
             oldPpn = length(which(Old == 1)) / (n()-10),
             # density positively skewed
             densMed = median(Dens),
@@ -232,7 +276,7 @@
             densMax = max(Dens),
             densIQR = IQR(Dens),
             # irrig can count everybody
-            irrigN = length(which(irrig == 1)),
+            irrigY = length(which(irrig == 1)),
             irrigPpn = length(which(irrig == 1)) / n(),
             # and human land use suuuuper skewed
             densOwnMed = median(densOwn),
@@ -319,7 +363,7 @@
        
        
 
-    #### define a priori models ####
+    #### a priori models ####
       
       m1 <- clmm(behavO ~ deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
       m2 <- clmm(behavO ~ predFor + deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
@@ -386,18 +430,40 @@
 
         
   
-    #### test proportional odds assumption ####
-        
-      # Agresti 2002 says this assumption should be based more on the inference you want to draw than
-      # methematical considerations, but out of curiosity... (using models without random herd effect) 
-      poddstest <- clm(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, Hess = TRUE, nAGQ = 10, dat = dat) 
-      nominal_test(poddstest) # nothing significant, suggests meet assumption
-      scale_test(poddstest) # predfor is significant; try scaling by it
+    #### test proportional odds assumptions ####
       
-      test <- clmm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, scale = ~predFor, dat = dat)
-      summary(test) # worse LL and AIC than top model; not changing it.
+      
+      ## nominal & scale effects (does predFor have same effect on ea response category?) ##
+          
+          ## predFor  - nominal effect
+          mod2nompred <- clmm2(behavO ~ deltaFor + irrig + deltaFor:irrig, nominal = ~predFor, 
+            random = Herd, Hess = TRUE, nAGQ = 10, dat = dat)
+          anova(mod2, mod2nompred)
+          # no evidence of difference in how behavs respond to predfor (p = 0.449)
+          
+          ## predFor - scale effect
+          mod2scalepred <- clmm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, scale = ~predFor, 
+            random = Herd, Hess = TRUE, nAGQ = 10, dat = dat) 
+          anova(mod2, mod2scalepred) 
+          # samesies p = 0.9698
+
+      
+      ## thresholds (does whole model describe diff effects for ea response category?) ##
+
+          ## define topmodel using clmm2 (uses default flexible thresholds)
+          mod2 <- clmm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, 
+            random = Herd, Hess = TRUE, nAGQ = 10, dat = dat, threshold = "flexible")  
+          
+          ## same model but with equidistant thresholds
+          mod2equ <-  clmm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, 
+            random = Herd, Hess = TRUE, nAGQ = 10, dat = dat, threshold = "equidistant")  
+          
+          ## test for diffs
+          anova(mod2, mod2equ)
+          # no diff in likelihood between the models (p = 1)      
       
         
+    
      #### test whether random effect merits increased model complexity ####
         
   
@@ -540,55 +606,55 @@
         
       # oh my what a delightful plot
       ggplot(poppns, aes(x = Herd, ppn, fill = behav)) +
-        geom_bar(stat="identity",position='fill') +
+        geom_bar(stat = "identity", position = 'fill') +
         labs(x = "", y = "Proportion") +
         theme(text = element_text(size=15),
           axis.text.x = element_text(angle = 45, hjust = 1),
           legend.title=element_blank())
- 
-        
+      
+      
+    #### Covariate summaries per herd ####
+      
+      par(mfrow = c(3, 1))
+      hist(herdcovs$irrigPpn)
+      hist(herdcovs$deltaForIQR)
+      hist(herdcovs$densOwnIQR)
+      
+
         
     #### Effects per herd ####
 
-        
-      # ordered low to high, not labeled with names
-          
-          # calc center +- spread of variance per herd, ordered low to high
-          herd <- mod$ranef + qnorm(0.975) * sqrt(mod$condVar) %o% c(-1, 1) # %o% = genius
-          herd2 <- cbind(herd, m19$ranef)
-          herddat <- data.frame(herd2[order(KRISTINYOUEFFEDTHISUP),]) %>%
-            rename(CIlow = X1, CIhigh = X2, Est = X3) %>%
-            tibble::rownames_to_column() 
-          
-          # plot
-          ggplot(herddat, aes(y = Est, x = rowname,
-            ymin = CIlow, ymax = CIhigh)) +
-            geom_point() +
-              geom_errorbar(width = 0.1) +
-              geom_hline(yintercept = 0) 
-            
+
+        # calc center +- spread of variance per herd, ordered low to high
+        herd <- mod$ranef + qnorm(0.975) * sqrt(mod$condVar) %o% c(-1, 1) # %o% = genius
     
-     # ordered same as ppn(mig) plot, labeled
-          
-          herd <- mod$ranef + qnorm(0.975) * sqrt(mod$condVar) %o% c(-1, 1) # %o% = genius
-          herd3 <- cbind(herd, m19$ranef)
-          herdnums <- data.frame(Herd = unique(dat$Herd), herdNum = 1:16)
+        # df of herd number, center, and spread
+        herd2 <- data.frame(cbind(herd, mod$ranef)) %>%
+          tibble::rownames_to_column()  
+        colnames(herd2) <- c("herdNum", "CIlow", "CIhigh", "Est")
+        herd2$herdNum <- as.integer(herd2$herdNum)
+        
+        # map herd number to correct herd
+        herdeffect <- data.frame(Herd = unique(mod$model$Herd), herdNum = 1:16) %>%
+          left_join(herd2, by = "herdNum")  %>%
+          mutate(Herd = factor(Herd, levels = levels(popdat$Herd)))
+ 
+         # transparent plot to pathetically paste over bar graph
+         p <- ggplot(herdeffect, 
+           aes(y = Est, x = Herd, ymin = CIlow, ymax = CIhigh)) +
+           geom_point() +
+           geom_errorbar(width = 0.1) +
+           geom_hline(yintercept = 0) +
+           scale_y_continuous(position = "right") +
+           theme(
+             axis.text.x=element_text(angle=90, hjust=1),
+             panel.background = element_rect(fill = "transparent", colour = NA),
+             panel.grid.minor = element_blank(),
+             panel.grid.major = element_blank(),
+             plot.background = element_rect(fil = "transparent", colour = NA)
+             )
+         ggsave(p, filename = "./Plots/test.png", bg = "transparent")
 
-          herddat2 <- data.frame(herd3) %>%
-            rename(CIlow = X1, CIhigh = X2, Est = X3) %>%
-            tibble::rownames_to_column()  %>%
-            mutate(herdNum = as.integer(rowname)) %>%
-            left_join(herdnums, by = "herdNum")
-
-              
-          # plot
-          ggplot(herddat2, aes(y = Est, x = Herd,
-            ymin = CIlow, ymax = CIhigh)) +
-            geom_point() +
-              geom_errorbar(width = 0.1) +
-              geom_hline(yintercept = 0) +
-            theme(axis.text.x=element_text(angle=90, hjust=1))
-                          
 
       
         
@@ -597,9 +663,6 @@
       
         ## make predictions ##
 
-        
-
-           
             ## check it out
             summary(topmod2) # Hess = 18295.46 => model not ill-defined (see clmm2 tutorial)
 
@@ -661,27 +724,33 @@
                  
     #### Coefficient estimates - Averaged model ####     
 
+        # remove threshold info 
+        avgors <- avgdat %>%
+          filter(!grepl("other", cov))
+              
     
         ## plot all
-        ggplot(avgdat, 
+            
+        ggplot(avgors, 
           aes(y = OR, x = cov, ymin = ciLow85, ymax = ciHigh85)) +
           geom_point(size = 3) +
           geom_errorbar(width = 0.1) +
-          geom_hline(yintercept = 0, linetype = "dotted") +
+          geom_hline(yintercept = 1, linetype = "dotted") +
           labs(y = "OR", x = "", title = "85% CI")       
           
         
         ## plot without densOwn (huge CI messes up scale)
-        ggplot(avgdat[avgdat$cov != "densOwnCtr",], 
+        ggplot(avgors[avgors$cov != "densOwnCtr",], 
           aes(y = OR, x = cov, ymin = ciLow85, ymax = ciHigh85)) +
           geom_point(size = 3) +
           geom_errorbar(width = 0.1) +
-          geom_hline(yintercept = 0, linetype = "dotted") +
-          labs(y = "OR", x = "", title = "85% CI")
+          geom_hline(yintercept = 1, linetype = "dotted") +
+          labs(y = "OR", x = "", title = "85% CI") +
+          ylim(low = 0, high = 5)
         
         
         ## separate plots of just densOwn, Age, dens:irrig (MT TWS)
-        p.do <- ggplot(avgdat[avgdat$cov == "densOwnCtr",], 
+        p.do <- ggplot(avgors[avgors$cov == "densOwnCtr",], 
           aes(y = OR, x = cov, ymin = ciLow85, ymax = ciHigh85)) +
           geom_point(size = 3) +
           geom_errorbar(width = 0.05) +
@@ -693,7 +762,7 @@
             axis.text.x = element_text(size=14),
             axis.text.y = element_text(size=14),
             plot.title = element_text(hjust = 0.5))
-        p.ol <- ggplot(avgdat[avgdat$cov == "oldCtr",], 
+        p.ol <- ggplot(avgors[avgors$cov == "oldCtr",], 
           aes(y = OR, x = cov, ymin = ciLow85, ymax = ciHigh85)) +
           geom_point(size = 3) +
           geom_errorbar(width = 0.05) +
@@ -705,7 +774,7 @@
             axis.text.x = element_text(size=14),
             axis.text.y = element_text(size=14),
             plot.title = element_text(hjust = 0.5))
-        p.da <- ggplot(avgdat[avgdat$cov == "densCtr:irrigCtr",], 
+        p.da <- ggplot(avgors[avgors$cov == "densCtr:irrigCtr",], 
           aes(y = OR, x = cov, ymin = ciLow85, ymax = ciHigh85)) +
           geom_point(size = 3) +
           geom_errorbar(width = 0.05) +
@@ -727,7 +796,7 @@
         
         
         ## pull out just ag interactions
-        avgsub <- avgdat %>%
+        avgsub <- avgors %>%
           filter(cov == "densCtr" | cov == "densCtr:irrigCtr" |
               cov == "deltaForCtr" | cov == "deltaForCtr:irrigCtr") 
         # dplyr hates me so i'm doing this an awful way
@@ -777,6 +846,9 @@
         pr1 <- profile(topmod2, alpha=1e-4)
         pr1 # this is asymmetric, therefore asymmetric confidence intervals are most appropriate
         
+        
+        
+
 
         
         
