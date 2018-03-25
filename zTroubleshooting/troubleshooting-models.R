@@ -3402,4 +3402,100 @@ sf <- function(y) {
           
           library(grid)
           grid.draw(rbind(ggplotGrob(p1), ggplotGrob(p2), size = "last"))
+          
+          
+          
+          
+    #### i think i centered biniary covariates wrong ####
+          
+
+          test <- clmm(behavO ~ predForCtr + irrig + densCtr + irrig:densCtr + (1|Herd), Hess = TRUE, nAGQ = 10, dat = ctrdat)        
+
+          summary(test)          
+          summary(m22)          
+
+
+
+    ## ok kristin what's your deal?
+    ## i want to center the covariates because i'm averaging models
+    ##    with and without interaction terms
+    ## and my understanding is that centering allows you to combine
+    ##    coefficients in models that do and do not include the interaction
+    ##    (e.g., Dens alone in one model, and Dens + Dens*Irrig in another)
+    ## because otherwise the interaction alters the interpretation of the main effect
+    ## i mostly got this idea from Schielzeth 2010 (linked from stack of course)
+
+    # if this works correctly, then i should see approximately the same coefficient values
+    # in a centered and an uncentered model, so let's check that first
+
+    str(olddat) # irrig is a factor with 2 levels, dummy coded
+    summary(m22) # predfor + irrig + dens + irrig:dens
+    
+    # first center non-binary covariates only and compare
+    test <- olddat %>%
+      mutate(predForCtr = predFor - mean(predFor),
+             deltaForCtr = deltaFor - mean(deltaFor),
+             irrigCtr = as.numeric(irrig) - mean(as.numeric(irrig)),
+             densCtr = Dens - mean(Dens),
+             oldCtr = as.numeric(Old) - mean(as.numeric(Old)),
+             densOwnCtr = densOwn - mean(densOwn))  
+    
+    t22 <- clmm(behavO ~ predForCtr + irrig + densCtr + irrig:densCtr + (1|Herd), Hess = TRUE, nAGQ = 10, dat = test)
+    summary(m22); summary(t22)
+    # result:
+      # all coefficient estimates remain the same, EXCEPT irrig (main effect only)
+      # and irrig changes sign which i find particularly disconcerting
+    
+    
+    
+    # ok, so try also centering the binary covariates
+    t22v2 <- clmm(behavO ~ predForCtr + irrigCtr + densCtr + irrigCtr:densCtr + (1|Herd), Hess = TRUE, nAGQ = 10, dat = test)
+    summary(m22); summary(t22v2)
+    # result:
+      # now main effect of density is also different, and irrig is still fucked
+      # but the interaction is fine. i know this must make sense but howwwww?
+    # i think this might be a fresh morning brain question
+    
+
+    # oops, semi-addled mid-afternoon brain will have to do...
+    
+    # um, did you think about looking at diffs in centered and uncentered? duh.
+    par(mfrow = c(1,2)); hist(test$Dens); hist(test$densCtr)
+    
+    # yep ok, not rocket science...
+    # centering the density covariate allows it to be negative
+    # which makes no biological sense, you can't have negative density
+    # i suspect this is what's changing the sign of the main effect of irrig
+    # although i'm confused about how exactly that works
+    
+    # if can't detect an effect of density should i remove that main effect?
+    
+    t22 <- clmm(behavO ~ predFor + irrig + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = test) 
+
+    summary(t22)    
+    
+    t222 <- clmm(behavO ~ predFor + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = test) 
+
+    summary(t222)    
+    
+    # hm ok so you really need to be thinking about this in terms of your topmodel
+    
+    summary(mod)
+    # can't detect an effect of deltafor alone
+    
+    # so what happens if you remove it... is that icky??
+    
+    tmod <- clmm(behavO ~ predFor + irrig + deltaFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat) 
+    summary(tmod)
       
+    
+    
+    #### oops rabbithole. pct varn by herd alone. ####
+    
+              # what about vs just herd alone?
+          mod.herd <- clm(behavO ~ Herd, Hess = TRUE, nAGQ = 10, data = dat)
+          summary(mod.herd)
+          r.squaredLR(mod.herd, nullmod.nore)
+          # never mind, can't estimate this model
+    
+    
