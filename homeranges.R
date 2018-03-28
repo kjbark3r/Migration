@@ -145,6 +145,20 @@
       write.csv(indivlocswin, "indivlocswin.csv", row.names=F)
     
 
+  #### Summarize number of locs/indiv used to delineate home range (for ms) ####
+      
+    # per indiv
+    indivwinsum <- indivlocswin %>%
+      group_by(AnimalID) %>%
+      summarise(nLoc = n(), Herd = unique(Herd))
+    
+    # per herd  
+    herdwinsum <- indivwinsum %>%
+      group_by(Herd) %>%
+      summarise(
+        meanLoc = mean(nLoc), 
+        minLoc = min(nLoc),
+        maxLoc = max(nLoc))
 
     
       
