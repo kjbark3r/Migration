@@ -55,27 +55,24 @@
         
     #### Winter HR polygons (HRs created in homeranges.R; popnHRs combined and processed in ArcMap) ####
         
-        windens <- readOGR("../GIS/Shapefiles/Elk/PopnHRs", layer ='WinHRcombos')
+        windens <- readOGR("../GIS/Shapefiles/Elk/PopnHRs", layer ='WinHRcombosFeb')
         windens <- spTransform(windens, stateplane)
-        winindiv <- readOGR("../GIS/Shapefiles/Elk/IndivHRs", layer ='IndivWinMCPs')
+        winindiv <- readOGR("../GIS/Shapefiles/Elk/IndivHRs", layer ='AllFebHRs')
         winindiv <- spTransform(winindiv, stateplane)
         plot(windens); plot(winindiv, add = T)
         
     #### extract density values associated with each individual based on area occupied during winter ####
         
-
+        # density data (calculated in ar
         
         # determine where indivs of interest were located during winter
-        indivlocswin <- read.csv("indivlocswin.csv")
+        indivlocswin <- read.csv("indivlocsfeb.csv")
         spdf.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=indivlocswin$Longitude,"y"=indivlocswin$Latitude), 
                                                     indivlocswin, proj4string = latlong), stateplane)
         indivhrs <- mcp(spdf.sp[,"AnimalID"], percent = 100)
         
-        # determine winter density
-        popnhrs <- shapefile("../GIS/Shapefiles/Elk/PopnHRs/WinHRcombos")
-        popnhrs <- spTransform(popnhrs, stateplane)
-        windens <- popnhrs
-        windens@data <- dplyr::select(windens@data, Density)
+
+        windens@data <- dplyr::select(windens@data, consDens)
         
         # sanity check
         plot(windens, col = "blue"); plot(indivhrs, add = T)
@@ -84,7 +81,7 @@
         dens <- raster(extent(windens))
         newres <- res(dens)/100 # need finer resolution than default
         dens <- raster(extent(windens), res = newres)
-        rast <- rasterize(windens, dens, field = windens@data$Density)
+        rast <- rasterize(windens, dens, field = windens@data$consDens)
         plot(rast)
 
         
@@ -124,10 +121,10 @@
             mutate(Dens = ifelse((Herd == "Blacktail" | Herd == "Sage Creek") & Year == 2012,
               6003/1915, Dens)) %>% # 6003 = combined count in 2012. 1915 = area (km2)
             mutate(Dens = ifelse(AnimalID == "BRUC15064" | AnimalID == 'BRUC15099', 1.59649, Dens)) 
-          write.csv(indivdat, "dens-indiv.csv", row.names = F)
+          write.csv(indivdat, "dens-indiv-feb.csv", row.names = F)
           
          herddat <- data.frame(popnhrs@data)
-         write.csv(herddat, "dens-group.csv", row.names = F)
+         write.csv(herddat, "dens-group-feb.csv", row.names = F)
             
       
  

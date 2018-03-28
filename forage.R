@@ -154,7 +154,7 @@
       #### Data prep ####
       
           # read in individual winter home ranges
-          indivhrswin <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/AllWinHRs")
+          indivhrswin <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/AllFebHRs")
           
       
           # and population ranges
@@ -251,7 +251,7 @@
           }
 
           
-          write.csv(deltafor, "deltafor-prelim.csv", row.names=F)
+          write.csv(deltafor, "deltafor-prelim-feb.csv", row.names=F)
 
           
       
@@ -329,7 +329,7 @@
           
           deltafor$deltaNDVI <- deltafor$maxNDVIout - deltafor$maxNDVIin
 
-          write.csv(deltafor, "deltafor.csv", row.names=F)
+          write.csv(deltafor, "deltafor-feb.csv", row.names=F)
                     
           beep()
           

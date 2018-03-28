@@ -89,16 +89,14 @@
 
 
     # winter locations (for density estimates)
-    popnlocswin <- allcowlocs %>%
+    popnlocsfeb <- allcowlocs %>%
         # only locns collected during winter
-        filter(Month == 12 | Month == 1 | Month == 2) %>%
-        # map december locs to following year's winter
-        mutate(Year = ifelse(Month == 12, Year + 1, Year)) %>%
+        filter(Month == 2) %>%
         # only keep indivs from popns and years interest
         semi_join(popnyrs, by = c("Herd", "Year")) %>%
         # remove stored data about filtered out herds and indivs
         mutate(Herd = factor(Herd), AnimalID = factor(AnimalID))
-    write.csv(popnlocswin, file = "popnlocs-win.csv", row.names=F)
+    write.csv(popnlocsfeb, file = "popnlocs-feb.csv", row.names=F)
 
 
     # # winter locations with couple-month buffer (for winter covariate extraction)
@@ -118,14 +116,14 @@
 
     
     # winter locations (to create individual winter home ranges)
-    indivlocswin <- locs %>%
+    indivlocsfeb <- locs %>%
       # only consider locns collected during winter
       mutate(Date = as.Date(Date)) %>%
       # for indivs that migrated early, only consider locs occurring prior to movement
       filter(ifelse(AnimalID == "PM120080" | AnimalID == "PM120023", Month == 12 | Month == 1,
       ifelse(AnimalID == "NA14035", Date < "2015-02-15", 
-      # for all other indivs, winter = dec-feb
-      Month == 12 | Month == 1 | Month == 2))) %>%
+      # for all other indivs, winter = feb
+      Month == 2))) %>%
       # map december locs to following year's winter
       mutate(YrOfLoc = ifelse(Month == 12, Year + 1, Year)) %>%
       dplyr::select(-Year) %>%
@@ -142,13 +140,13 @@
       mutate(AnimalID = factor(AnimalID),
              Herd = factor(Herd))
       #store 
-      write.csv(indivlocswin, "indivlocswin.csv", row.names=F)
+      write.csv(indivlocsfeb, "indivlocsfeb.csv", row.names=F)
     
 
   #### Summarize number of locs/indiv used to delineate home range (for ms) ####
       
     # per indiv
-    indivwinsum <- indivlocswin %>%
+    indivwinsum <- indivlocsfeb %>%
       group_by(AnimalID) %>%
       summarise(nLoc = n(), Herd = unique(Herd))
     
@@ -273,41 +271,41 @@
   #### Winter #### 
   
     ## get xy points; write to dataframe, to spatial data frame, to stateplane
-    spdf.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=popnlocswin$Longitude,
-                                                             "y"=popnlocswin$Latitude),
-                            popnlocswin, proj4string = latlong), stateplane)
+    spdf.sp <- spTransform(SpatialPointsDataFrame(data.frame("x"=popnlocsfeb$Longitude,
+                                                             "y"=popnlocsfeb$Latitude),
+                            popnlocsfeb, proj4string = latlong), stateplane)
     
  
     ## estimate mcp for each population
-    popnwinmcps <- mcp(spdf.sp[,"Herd"], percent = 100,
+    popnfebmcps <- mcp(spdf.sp[,"Herd"], percent = 100,
                    unin = "m", unout = "km2")
     
     ## export population mcps
-    writeOGR(popnwinmcps, 
+    writeOGR(popnfebmcps, 
          dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
-         layer = "PpnWinMCPs", 
+         layer = "PpnFebMCPs", 
          driver = "ESRI Shapefile",
          overwrite = TRUE)
     
  
        
     ## estimate kde for each population
-    popnwinuds <- kernelUD(spdf.sp[,"Herd"], h = "href")
+    popnfebuds <- kernelUD(spdf.sp[,"Herd"], h = "href")
                              #, extent = 2) # need extent > default of 1 
-    popnwinkdes <- getverticeshr(popnwinuds, percent = 95)
+    popnfebkdes <- getverticeshr(popnfebuds, percent = 95)
   
 
     ## export population kdes 
-    writeOGR(popnwinkdes, 
+    writeOGR(popnfebkdes, 
          dsn = "../GIS/Shapefiles/Elk/PopnHRs", 
-         layer = "PpnWinKDEs", 
+         layer = "PpnFebKDEs", 
          driver = "ESRI Shapefile",
          overwrite = TRUE)    
     
     
     ## store winter hr area (for density estimation)
-    write.csv(popnwinmcps@data, file = "popn-winhr-areasMCP.csv", row.names = F)
-    write.csv(popnwinkdes@data, file = "popn-winhr-areasKDE.csv", row.names = F)
+    write.csv(popnfebmcps@data, file = "popn-winhr-areasMCP-feb.csv", row.names = F)
+    write.csv(popnfebkdes@data, file = "popn-winhr-areasKDE-feb.csv", row.names = F)
 
     
     
@@ -347,12 +345,11 @@
 ### ### ### ### ### ###
 ####  |INDIV HRS|  ####
 ### ### ### ### ### ###
-  
-  
-    #### Winter ####
+
+    
     
     # remove sapphires and estimate separately (due to extent error)
-    indivsub <- filter(indivlocswin, Herd != "Sapphire") 
+    indivsub <- filter(indivlocsfeb, Herd != "Sapphire") 
     indivsub <- droplevels(indivsub)
     xy <- data.frame("x"=indivsub$Longitude, "y"=indivsub$Latitude)
     spdf <- SpatialPointsDataFrame(xy, indivsub, proj4string = latlong)
@@ -361,12 +358,12 @@
     kdes <- getverticeshr(kud, percent = 95)
     writeOGR(kdes, 
        dsn = "../GIS/Shapefiles/Elk/IndivHRs", 
-       layer = "AllWinHRs", 
+       layer = "AllFebHRs", 
        driver = "ESRI Shapefile",
        overwrite = TRUE) 
     
     # sapph 
-    sapph <- filter(indivlocswin, Herd == "Sapphire")
+    sapph <- filter(indivlocsfeb, Herd == "Sapphire")
     sapph <- droplevels(sapph)
     xy2 <- data.frame("x"=sapph$Longitude, "y"=sapph$Latitude)
     spdf2 <- SpatialPointsDataFrame(xy2, sapph, proj4string = latlong)
@@ -375,33 +372,24 @@
     kdes2 <- getverticeshr(kud2, percent = 95)
     writeOGR(kdes2, 
        dsn = "../GIS/Shapefiles/Elk/IndivHRs", 
-       layer = "SapphWinHRs", 
+       layer = "SapphFebHRs", 
        driver = "ESRI Shapefile",
        overwrite = TRUE) 
 
     # combine
-    sap <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/SapphWinHRs")
-    oth <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/AllWinHRs")
-    indivhrswin <- union(sap, oth) 
-    plot(indivhrswin)
+    sap <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/SapphFebHRs")
+    oth <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/AllFebHRs")
+    indivhrsfeb <- raster::union(sap, oth) 
+    plot(indivhrsfeb)
     
     # add herd and year of interest before storing
     indivdat <- read.csv("dens-indiv.csv") %>% select(-Dens)
-    indivhrswin@data <- left_join(indivhrswin@data, indivdat, 
+    indivhrsfeb@data <- left_join(indivhrsfeb@data, indivdat, 
        by = c("id" = "AnimalID"))
-    writeOGR(indivhrswin, 
+    writeOGR(indivhrsfeb, 
        dsn = "../GIS/Shapefiles/Elk/IndivHRs", 
-       layer = "AllWinHRs", 
+       layer = "AllFebHRs", 
        driver = "ESRI Shapefile",
        overwrite = TRUE) 
 
       
-  
-### ### ###  ### ### ### 
-#### ~ NEXT STEPS ~ ####
-### ### ###  ### ### ### 
-
-
-# create population growing season home range EXCLUSIVE of individual winter season home range
-  # and store with indiv identifier, to to use in calculating what's avail on winter range
-    # vs what's avail outside that area during summer

@@ -45,7 +45,7 @@
   #### "Raw" data  ####
 
     # winter home range for each individual (from homeranges.R)
-    indivhrsprelim <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/AllWinHRs") 
+    indivhrsprelim <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/AllFebHRs") 
 
     # list of land use files
     lulist <- list.files(path = "../GIS/Shapefiles/Land", pattern = "lu.+shp$",full.names = TRUE)
@@ -127,5 +127,5 @@
     length(which(moddat$irrig == 1))
     
     # export updated model data file
-    write.csv(moddat, "human-covariates.csv", row.names = F)
+    write.csv(moddat, "human-covariates-feb.csv", row.names = F)
     

@@ -50,14 +50,14 @@
     
   #### "Raw" data  ####
     
-    deltafor <- read.csv("deltafor.csv") # from forage.R
+    deltafor <- read.csv("deltafor-feb.csv") # from forage.R
     predfor <- read.csv("predfor.csv") # from forage.R
-    dens <- read.csv("dens-indiv.csv") # from consdens.R
+    dens <- read.csv("dens-indiv-feb.csv") # from consdens.R
     age <- read.csv("indiv-dat.csv") # from dataprep-elkdb.R
     behav <- read.csv("mig-behav.csv") # from migbehav-migrateR.R
     behavpop <- read.csv("behav-per-popn.csv") # from migbehav-migrateR.R
-    popndens <- read.csv("dens-group.csv") # from consdens.R
-    hum <- read.csv("human-covariates.csv") # from landuse.R
+    popndens <- read.csv("dens-group-feb.csv") # from consdens.R
+    hum <- read.csv("human-covariates-feb.csv") # from landuse.R
  
        
   #### Model data  ####
@@ -154,8 +154,8 @@
       
       
       # all indiv data (including "NA" age)
-      write.csv(dat, "moddat.csv", row.names=F)
+      write.csv(dat, "moddat-feb.csv", row.names=F)
       
       # herd-level summaries
-      write.csv(popdat, "pop-summaries.csv", row.names=F)
+      write.csv(popdat, "pop-summaries-feb.csv", row.names=F)
       
