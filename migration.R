@@ -704,8 +704,13 @@
 ### ### ### ### ###
 #### |VISUALS| ####
 ### ### ### ### ###
-      
+ 
         
+        # oikos width options (PS - panel letters (lowercase) eg (a)) (pps - <50MB) (ppps = col = :))
+        wcol1.0 = 8 # units = cm
+        wcol1.5 = 12.5 # 1.5 column
+        wcol2 = 16.6
+    
         
     #### Proportion behavior by herd ####  
       
@@ -716,17 +721,49 @@
           mutate(behav = ifelse(behav == "ppnMig", "Migrant",
             ifelse(behav == "ppnOth", "Intermediate", "Resident")) ) %>%
           mutate(behav = factor(behav, levels = c("Resident", "Intermediate", "Migrant"), ordered = TRUE)) %>%
+          mutate(Herd = ifelse(Herd == "Dome", "N. Yellowstone", 
+            ifelse(Herd == "Sapphire", "N. Sapphires", paste(Herd)))) %>%
           mutate(Herd = factor(Herd, levels = Herd[order(popdat$ppnMig)]))
+
         
-      # oh my what a delightful plot
-      ggplot(poppns, aes(x = Herd, ppn, fill = behav)) +
+      # bar graph - color
+      pppp <- ggplot(poppns, aes(x = Herd, ppn, fill = behav)) +
         geom_bar(stat = "identity", position = 'fill') +
         labs(x = "", y = "Proportion") +
-        theme(text = element_text(size=15),
-          axis.text.x = element_text(angle = 45, hjust = 1),
+        theme(text = element_text(size=16),
+          axis.text.x = element_text(angle = 55, hjust = 1),
           legend.title=element_blank())
+          
+          ggsave("./Plots/herd-behavppns.jpg",
+            plot = pppp,
+            device = "jpeg",
+            dpi = 600,
+            units = "cm",
+            width = wcol2)
+
+          
+      # bar graph - b&w
+      ppbw <- ggplot(poppns, aes(x = Herd, ppn, fill = behav)) +
+        geom_bar(stat = "identity", position = 'fill') +
+        labs(x = "", y = "Proportion") +
+        theme_bw() +
+        theme(text = element_text(size=16),
+          # rotate x axis text & center below bars
+          axis.text.x = element_text(angle = 55, hjust = 1),
+          legend.title=element_blank(),
+          # remove background grid
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+        scale_fill_grey(start = 0.9, end = 0)
+          
+          ggsave("./Plots/herd-behavppns-bw.jpg",
+            plot = ppbw,
+            device = "jpeg",
+            dpi = 600,
+            units = "cm",
+            width = wcol2,
+            height = wcol2)          
       
-      
+          
     #### Covariate summaries per herd ####
       
       par(mfrow = c(3, 1))
@@ -738,21 +775,28 @@
         
     #### Effects per herd ####
 
+      
+      
+      # read in data for herd effect
+      herdeffect <- read.csv("herdeffect-feb.csv") # or...
 
-        # calc center +- spread of variance per herd, ordered low to high
-        herd <- modDelta$ranef + qnorm(0.975) * sqrt(modDelta$condVar) %o% c(-1, 1) # %o% = genius
-    
-        # df of herd number, center, and spread
-        herd2 <- data.frame(cbind(herd, modDelta$ranef)) %>%
-          tibble::rownames_to_column()  
-        colnames(herd2) <- c("herdNum", "CIlow", "CIhigh", "Est")
-        herd2$herdNum <- as.integer(herd2$herdNum)
-        
-        # map herd number to correct herd
-        herdeffect <- data.frame(Herd = levels(modDelta$model$Herd), herdNum = 1:16) %>%
-          left_join(herd2, by = "herdNum")  %>%
-          mutate(Herd = factor(Herd, levels = levels(popdat$Herd)))
+                # calc center +- spread of variance per herd, ordered low to high
+                herd <- modDelta$ranef + qnorm(0.975) * sqrt(modDelta$condVar) %o% c(-1, 1) # %o% = genius
+            
+                # df of herd number, center, and spread
+                herd2 <- data.frame(cbind(herd, modDelta$ranef)) %>%
+                  tibble::rownames_to_column()  
+                colnames(herd2) <- c("herdNum", "CIlow", "CIhigh", "Est")
+                herd2$herdNum <- as.integer(herd2$herdNum)
+                
+                # map herd number to correct herd
+                herdeffect <- data.frame(Herd = levels(modDelta$model$Herd), herdNum = 1:16) %>%
+                  left_join(herd2, by = "herdNum")  %>%
+                  mutate(Herd = factor(Herd, levels = levels(popdat$Herd)))
+                write.csv(herdeffect, file = "herdeffect-feb.csv", row.names = F)
  
+                
+                
          # transparent plot to pathetically paste over bar graph
          p <- ggplot(herdeffect, 
            aes(y = Est, x = Herd, ymin = CIlow, ymax = CIhigh)) +
@@ -767,10 +811,34 @@
              panel.grid.major = element_blank(),
              plot.background = element_rect(fil = "transparent", colour = NA)
              )
-         ggsave(p, filename = "./Plots/test2.png", bg = "transparent")
+         ggsave(p, filename = "./Plots/herdeffect-feb.png", bg = "transparent")
 
 
-      
+         # thick white version of above (for ms)
+         pbw <- ggplot(herdeffect, 
+           aes(y = Est, x = Herd, ymin = CIlow, ymax = CIhigh)) +
+           geom_point(color = "white", size = 3) +
+           geom_errorbar(width = 0.4, color = "white", size = 1) +
+           geom_hline(yintercept = 0, color = "white") +
+           scale_y_continuous(position = "right") +
+           theme(
+             axis.text.x=element_text(angle=90, hjust=1),
+             panel.background = element_rect(fill = "transparent", colour = NA),
+             panel.grid.minor = element_blank(),
+             panel.grid.major = element_blank(),
+             plot.background = element_rect(fil = "transparent", colour = NA)
+             )
+  
+         ggsave(pbw, filename = "./Plots/herdBw.jpg",
+           bg = "transparent",
+           device = "png",
+           dpi = 600,
+           units = "cm",
+           width = wcol2,
+          height = wcol2)        
+         
+         
+         
         
     #### Prediction plots - Top models ####
       
@@ -815,13 +883,15 @@
             
         ## plot predictions ##
             
+            ## read in stord data from above
+            newdatDelta <- read.csv("predictions-topmod-feb-delta.csv")
             
             ## pull random subsample of 10000 predictions (takes forEVer otherwise)
             subdatDelta <- newdatDelta[sample(nrow(newdatDelta), 10000),] 
             subdatDens <- newdatDens[sample(nrow(newdatDens), 10000),]
 
             
-            ## predFor
+            ## predFor - color
             pp.pf <- ggplot(subdatDelta, aes(x = predFor, y = predprobDelta, colour = behavO)) +
               geom_smooth(se = FALSE) +
               scale_color_hue(name = "", labels = c("Resident", "Intermediate", "Migrant")) +
@@ -830,8 +900,63 @@
                 y = "Predicted probability") +
               theme_minimal() +
               theme(text = element_text(size=20), plot.title = element_text(hjust = 0.5))  
+            
+            
+            
+            
+            ## predFor - b&w for thesis
+            pp.pf.bw <- ggplot(subdatDelta, aes(x = predFor, y = predprobDelta, linetype = behavO)) +
+              geom_smooth(se = FALSE, color = "black", size = 0.5) +
+              scale_linetype_manual(
+                values=c("solid", "dotdash", "dotted"), 
+                name = "", labels = c("Migrant", "Intermediate", "Resident")) +
+              labs(
+                x = "Forage predictabilty \n (- 6-yr stdev of NDVI amplitude)", 
+                y = "Predicted probability") +
+              theme_minimal() +
+              theme(text = element_text(size=18), plot.title = element_text(hjust = 0.5))  
+            
+
+            ggsave("./Plots/predFor-bw.jpg",
+              plot = pp.pf.bw,
+              device = "jpeg",
+              dpi = 600,
+              units = "cm",
+              width = wcol2,
+              height = wcol2/2)   
+            
 
 
+            ## deltaFor on Ag - b&w for thesis
+            pp.df.bw <- ggplot(
+              subdatDelta[subdatDelta$irrig == 1,], 
+              aes(
+                x = deltaFor, 
+                y = predprobDelta, 
+                linetype = behavO)) +
+              geom_smooth(se = FALSE, color = "black", size = 0.5) +
+              scale_linetype_manual(
+                values = c("solid", "dotdash", "dotted"),
+                name = "", labels = c("Migrant", "Intermediate", "Resident")) +
+              labs(
+                x = "Summer forage difference \n (maxNDVI outside - inside winter range)", 
+                y = "Predicted probability",
+                title = "Agriculture on winter range") +
+              theme_minimal() +
+              theme(text = element_text(size=18), plot.title = element_text(hjust = 0.5)) 
+            
+  
+            ggsave("./Plots/deltaFor-bw.jpg",
+              plot = pp.df.bw,
+              device = "jpeg",
+              dpi = 600,
+              units = "cm",
+              width = wcol2,
+              height = wcol2/2)               
+            
+            
+            
+            
             ## deltaFor on Ag
             pp.df <- ggplot(
               subdatDelta[subdatDelta$irrig == 1,], 
@@ -864,10 +989,7 @@
  
             ## export each
             
-            # oikos width options (PS - panel letters (lowercase) eg (a)) (pps - <50MB) (ppps = col = :))
-            wcol1.0 = 8 # units = cm
-            wcol1.5 = 12.5 # 1.5 column
-            wcol2 = 16.6
+ 
             
             ggsave("./Plots/predFor-nogray-feb.jpg", 
               plot = pp.pf, 
@@ -1029,6 +1151,6 @@
         
 #### [save all the things] ####         
            
-  save.image("mig.Rdata")   
+  save.image("mig-feb.Rdata")   
       
 
