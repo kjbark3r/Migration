@@ -900,7 +900,11 @@
                 y = "Predicted probability") +
               theme_minimal() +
               theme(text = element_text(size=20), plot.title = element_text(hjust = 0.5))  
-            
+
+            ggsave("./Plots/predFor-col.jpg",
+              plot = pp.pf,
+              device = "jpeg",
+              dpi = 600)   
             
             
             
@@ -975,6 +979,14 @@
                 title = "Agriculture on winter range") +
               theme_minimal() +
               theme(text = element_text(size=20), plot.title = element_text(hjust = 0.5)) 
+            
+            
+
+            ggsave("./Plots/deltaFor-col.jpg",
+              plot = pp.df,
+              device = "jpeg",
+              dpi = 600)               
+            
             
             ## dens on ag
             pp.dn <- ggplot(subdatDens[subdatDens$irrig == 1,], aes(x = Dens, y = predprobDens, colour = behavO)) +
