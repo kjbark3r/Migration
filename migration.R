@@ -202,11 +202,12 @@
     	    summarise(nIndivs = n(),
     	              nMig = length(which(Behav == "migrant")),
     	              nRes = length(which(Behav == "resident")),
-    	              nOth = length(which(Behav == "other"))) %>%
+    	              nOth = length(which(Behav == "other")),
+    	              ppnIrrig = length(which(irrig == "1"))/n()) %>%
     	    mutate(ppnMig = round(nMig/nIndivs, digits = 2),
     	           ppnRes = round(nRes/nIndivs, digits =2),
     	           ppnOth = round(nOth/nIndivs, digits = 2)) %>%
-    	    dplyr::select(Herd, ppnMig, ppnRes, ppnOth, nIndivs)
+    	    dplyr::select(Herd, ppnMig, ppnRes, ppnOth, nIndivs, ppnIrrig)
         write.csv(herdsums, "summaries-herds-feb.csv", row.names=F)
         
         allherdsum <- herdsums %>%
@@ -315,20 +316,28 @@
       
       # consdens
       summary(dat$Dens)
+      table(dat$Dens, dat$Behav)
       
 
-
-      
       # age
-      
+      summary(dat$Old)
+      table(dat$Behav, dat$Old)
+      chisq.test(dat$Old, dat$Behav)
+      chisq.test(table(dat$Behav, dat$Old))
+      # chi-sq = 10.898, df = 2, p-val = 0.004301
+
       
       #densown
       
       
       # ppnAg
+      table(dat$Behav, dat$irrig)
+      chisq.test(table(dat$Behav, dat$irrig))
+      # chi-sq = 0.50484, df = 2, p-val = 0.7769
+      hist(herdsums$ppnIrrig)
+      summary(herdsums$ppnIrrig)
+      #IQR: > 0.8361-0.3956 = 0.4405
       
-      
- 
         
         
   #### Prediction data ####
@@ -885,10 +894,13 @@
             
             ## read in stord data from above
             newdatDelta <- read.csv("predictions-topmod-feb-delta.csv")
+            newdatDens <- read.csv("predictions-topmod-feb-dens.csv")
             
             ## pull random subsample of 10000 predictions (takes forEVer otherwise)
             subdatDelta <- newdatDelta[sample(nrow(newdatDelta), 10000),] 
+            subdatDelta$behavO <-  factor(subdatDelta$behav, levels = c("resident", "other", "migrant"), ordered = TRUE)
             subdatDens <- newdatDens[sample(nrow(newdatDens), 10000),]
+            subdatDens$behavO <-  factor(subdatDens$behav, levels = c("resident", "other", "migrant"), ordered = TRUE)
 
             
             ## predFor - color
