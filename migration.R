@@ -510,7 +510,57 @@
       resTop <- data.frame(orsTop) %>%
         tibble::rownames_to_column() %>%
         rename(coeff = rowname, CIlow = X2.5.., CIhigh = X97.5..)
-      write.csv(resTop, "results-topmodel-feb-dens.csv", row.names=F)              
+      write.csv(resTop, "results-topmodel-feb-dens.csv", row.names=F)          
+      
+      
+      
+    #### herd effects ####
+      
+      
+        
+        ## deltaFor model ##
+      
+        herdeffectDelta <- read.csv("herdeffect-feb-delta.csv") # or...
+  
+            # calc center +- spread of variance per herd, ordered low to high
+            herdDelta <- modDelta$ranef + qnorm((1+0.95)/2) * sqrt(modDelta$condVar) %o% c(-1, 1) # %o% = genius
+        
+            # df of herd number, center, and spread
+            herd2Delta <- data.frame(cbind(herdDelta, modDelta$ranef)) %>%
+              tibble::rownames_to_column()  
+            colnames(herd2Delta) <- c("herdNum", "CIlow", "CIhigh", "Est")
+            herd2Delta$herdNum <- as.integer(herd2Delta$herdNum)
+            
+            # map herd number to correct herd
+            herdeffectDelta <- data.frame(Herd = levels(modDelta$model$Herd), herdNum = 1:16) %>%
+              left_join(herd2Delta, by = "herdNum")  %>%
+              mutate(Herd = factor(Herd, levels = levels(popdat$Herd)),
+                     CIoverlap = ifelse(CIlow < 0 & CIhigh > 0, 1, 0))
+            write.csv(herdeffectDelta, file = "herdeffect-feb-delta.csv", row.names = F)
+                  
+            
+            
+                  
+          ## dens model ##
+            
+          herdeffectDens <- read.csv("herdeffect-feb-dens.csv") # or...
+  
+            # calc center +- spread of variance per herd, ordered low to high
+            herdDens <- modDens$ranef + qnorm(0.975) * sqrt(modDens$condVar) %o% c(-1, 1) # %o% = genius
+        
+            # df of herd number, center, and spread
+            herd2Dens <- data.frame(cbind(herdDens, modDens$ranef)) %>%
+              tibble::rownames_to_column()  
+            colnames(herd2Dens) <- c("herdNum", "CIlow", "CIhigh", "Est")
+            herd2Dens$herdNum <- as.integer(herd2Dens$herdNum)
+            
+            # map herd number to correct herd
+            herdeffectDens <- data.frame(Herd = levels(modDens$model$Herd), herdNum = 1:16) %>%
+              left_join(herd2Dens, by = "herdNum")  %>%
+              mutate(Herd = factor(Herd, levels = levels(popdat$Herd)),
+                     CIoverlap = ifelse(CIlow < 0 & CIhigh > 0, 1, 0))
+            write.csv(herdeffectDelta, file = "herdeffect-feb-dens.csv", row.names = F) 
+            
         
       
   #### MODERATELY-SUPPORTED MODELS #### 
@@ -785,28 +835,7 @@
     #### Effects per herd ####
 
       
-      
-      # read in data for herd effect
-      herdeffect <- read.csv("herdeffect-feb.csv") # or...
-
-                # calc center +- spread of variance per herd, ordered low to high
-                herd <- modDelta$ranef + qnorm(0.975) * sqrt(modDelta$condVar) %o% c(-1, 1) # %o% = genius
-            
-                # df of herd number, center, and spread
-                herd2 <- data.frame(cbind(herd, modDelta$ranef)) %>%
-                  tibble::rownames_to_column()  
-                colnames(herd2) <- c("herdNum", "CIlow", "CIhigh", "Est")
-                herd2$herdNum <- as.integer(herd2$herdNum)
-                
-                # map herd number to correct herd
-                herdeffect <- data.frame(Herd = levels(modDelta$model$Herd), herdNum = 1:16) %>%
-                  left_join(herd2, by = "herdNum")  %>%
-                  mutate(Herd = factor(Herd, levels = levels(popdat$Herd)))
-                write.csv(herdeffect, file = "herdeffect-feb.csv", row.names = F)
- 
-                
-                
-         # transparent plot to pathetically paste over bar graph
+         # transparent plot to pathetically paste over bar graph (use delta model bc best supported)
          p <- ggplot(herdeffect, 
            aes(y = Est, x = Herd, ymin = CIlow, ymax = CIhigh)) +
            geom_point() +
