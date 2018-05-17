@@ -2,9 +2,13 @@
 #  ASSESSING RELATIVE INFLUENCE OF FORAGE, HUMANS, AND    #
 #    INTRINSIC FACTORS ON MIGRATORY BEHAVIOR OF ELK       #
 #                   KRISTIN BARKER                        #
-#                 DEC 2017 - FOREVER                      #
+#               DEC 2017 - MAY 2018                      #
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
 
+
+## This code assesses the relationship 
+## between hypothesized covariates and migratory behavior 
+## of individual elk across SW Montana.
 
 
 
@@ -157,7 +161,7 @@
       
       ##### a) full-group summaries ####
       
-      summaries <- read.csv("summaries-covariates-feb.csv")
+      # summaries <- read.csv("summaries-covariates-feb.csv") # or run below
       
       
       summaries <- dat %>% summarise(
@@ -194,7 +198,7 @@
       #### b) herd summaries ####
       
       
-        herdsums <- read.csv("summaries-herds-feb.csv")
+        # herdsums <- read.csv("summaries-herds-feb.csv") # or run below
 
       
         herdsums <- dat %>%
@@ -226,6 +230,8 @@
             maxRes = max(ppnRes))
         
         
+        # herdcovs <- read.csv("summaries-herdcovs-feb.csv") # or run below
+        
         herdcovs <- dat %>%
           group_by(Herd) %>%
           summarise(
@@ -248,12 +254,37 @@
         write.csv(herdcovs, file = "summaries-herdcovs-feb.csv", row.names=F)
         
         
+        # variation within herds (maxNDVI and densOwn)
+        
+          # max NDVI inside indiv winHRs
+          maxforwin <- read.csv("deltafor-prelim-feb.csv")
+          hist(maxforwin$maxNDVIin) # super skewed, so report range not stdev
+          
+          herdvar <- dat %>%
+            left_join(maxforwin, by = "AnimalID") %>%
+            dplyr::select(-maxNDVIout) %>%
+            group_by(Herd) %>%
+            summarise(rangeNDVIwin = max(maxNDVIin) - min(maxNDVIin),
+                      rangeDensOwn = max(densOwn) - min(densOwn))
+          
+          hist(herdvar$rangeNDVIwin)
+          hist(herdvar$rangeDensOwn)
+          
+          herdvarsum <- herdvar %>%
+            summarise(minNDVIrange = min(rangeNDVIwin),
+                      maxNDVIrange = max(rangeNDVIwin),
+                      minDensOWnRange = min(rangeDensOwn),
+                      maxDensOWnRange = max(rangeDensOwn))
+          write.csv(herdvarsum, file = "summaries-withinherdvarn-feb.csv", row.names=F)
+            
+        
+        
         
       
       #### c) behavior type summaries ####
         
-        behavsums <- read.csv("summaries-behav-feb.csv")
-        behavsumslong <- t(behavsums)
+        # behavsums <- read.csv("summaries-behav-feb.csv") # or run below
+        # behavsumslong <- t(behavsums)
       
         
         behavsums <- dat %>%
@@ -481,11 +512,11 @@
         
         
         
-    #### compare top model to one of just herd ####
+    #### compare top model to one of just herd (for funzies) ####
         
         modHerd <- clm2(behavO ~ Herd, dat = dat)
         anova(mod2, modHerd) # p = 9.78e-05, herd alone explains behavior better :(
-        summary(mod2); summary(modHerd) # oh but Hessian is freakin' huge
+        summary(mod2); summary(modHerd) # oh but Hessian is freakin' huge for herd model
                                         # and so are z values for 3 herds
         mod2$ranef
         levels(dat$Herd)
@@ -493,9 +524,7 @@
         
     
     #### convert to estimates and CIs to odds ratios and store ####
-        
-      resTop <- read.csv("results-topmodel.csv")
-      
+
       ciTop <- confint(modDelta)
       coefsTop <- coef(modDelta)
       orsTop <- exp(cbind(OR = coefsTop, ciTop))
@@ -504,13 +533,13 @@
         rename(coeff = rowname, CIlow = X2.5.., CIhigh = X97.5..)
       write.csv(resTop, "results-topmodel-feb-delta.csv", row.names=F)              
         
-      ciTop <- confint(modDens)
-      coefsTop <- coef(modDens)
-      orsTop <- exp(cbind(OR = coefsTop, ciTop))
-      resTop <- data.frame(orsTop) %>%
+      ciTop2 <- confint(modDens)
+      coefsTop2 <- coef(modDens)
+      orsTop2 <- exp(cbind(OR = coefsTop2, ciTop2))
+      resTop2 <- data.frame(orsTop2) %>%
         tibble::rownames_to_column() %>%
         rename(coeff = rowname, CIlow = X2.5.., CIhigh = X97.5..)
-      write.csv(resTop, "results-topmodel-feb-dens.csv", row.names=F)          
+      write.csv(resTop2, "results-topmodel-feb-dens.csv", row.names=F)          
       
       
       
@@ -520,7 +549,7 @@
         
         ## deltaFor model ##
       
-        herdeffectDelta <- read.csv("herdeffect-feb-delta.csv") # or...
+            # herdeffectDelta <- read.csv("herdeffect-feb-delta.csv") # or run below
   
             # calc center +- spread of variance per herd, ordered low to high
             herdDelta <- modDelta$ranef + qnorm((1+0.95)/2) * sqrt(modDelta$condVar) %o% c(-1, 1) # %o% = genius
@@ -543,7 +572,7 @@
                   
           ## dens model ##
             
-          herdeffectDens <- read.csv("herdeffect-feb-dens.csv") # or...
+              # herdeffectDens <- read.csv("herdeffect-feb-dens.csv") # or run below
   
             # calc center +- spread of variance per herd, ordered low to high
             herdDens <- modDens$ranef + qnorm(0.975) * sqrt(modDens$condVar) %o% c(-1, 1) # %o% = genius
