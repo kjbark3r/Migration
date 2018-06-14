@@ -591,56 +591,6 @@
             write.csv(herdeffectDelta, file = "herdeffect-feb-dens.csv", row.names = F) 
             
         
-      
-  #### MODERATELY-SUPPORTED MODELS #### 
-      
-      #### looking at each ####
-        
-        ##  moderately-supported models, adding age back in where applic
-        m2 <- clmm(behavO ~ predFor + deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-        #m3 <- clmm(behavO ~ predFor + deltaFor + deltaFor:predFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-        m4 <- clmm(behavO ~ predFor + deltaFor + Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-        m6 <- clmm(behavO ~ predFor + deltaFor + Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-        m11 <- clmm(behavO ~ predFor + deltaFor + densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-        #m22 <- clmm(behavO ~ predFor + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)  
-
-      
-        # Arnold 2010 recommends 85% CI | #CI!=0 other than predfor
-        confint(m2, level = 0.85) 
-        confint(m6, level = 0.85) 
-        confint(m3, level = 0.85) 
-        #confint(m22, level = 0.85) 
-        confint(m11, level = 0.85) #irrig & irrig:dens
-        confint(m4, level = 0.85) 
-        
-        # export estimates, CIs, r2 per model (to combine with aicc info)
-        
-        modlist <- list(m2, m4, m6, m11)
-        modnames <- c("m2", "m4", "m6", "m11")
-        okmoddat <- data.frame(
-          cov = NA,
-          OR = NA,
-          CIlow = NA,
-          CIhigh = NA,
-          modname = NA
-          )
-        
-        for(i in 1:length(modlist)) {
-         mod <- modlist[[i]] 
-         ciMod <- confint(mod, level = 0.85)
-         covsMod <- coef(mod)
-         orsMod <- exp(cbind(OR = covsMod, ciMod))
-         
-         resMod <- data.frame(orsMod) %>%
-           tibble::rownames_to_column() %>%
-           rename(cov = rowname, CIlow = X7.5.., CIhigh = X92.5..) %>%
-           mutate(modname = modnames[i]) %>%
-          filter(!grepl("other", cov))
-         okmoddat <- rbind(okmoddat, resMod)
-        }
-       
-        okmoddat <- okmoddat[-1,]       
-
 
 
 ### ### ### ### ### #
@@ -651,46 +601,23 @@
         
       #### pseudo r-sq ####
         
-        # if null includes random effects, results tell variance explained by fixed effects alons
-        # if null doesn't include random, results tell conditional
-         # use mod not topmod
-
+        # define null model to compare actual model to
+            # if null includes random effects, results tell variance explained by fixed effects alons
+            # if null doesn't include random effects, results tell variance explained by all effects
         nullmod.nore <- clm(behavO ~ 1, Hess = TRUE, nAGQ = 10, data = dat)
         nullmod.re <- clmm(behavO ~ 1 + (1|Herd), Hess = TRUE, nAGQ = 10,  data = dat)   
-        
-        # McFadden #
-        
-          (mcF.c <- 1 - (mod$logLik/nullmod.nore$logLik)) # 0.18 explained by model
-          (mcF.m <- 1 - (mod$logLik/nullmod.re$logLik)) # 0.06 explained by fixed effects alone
+
           
         # Nagelkerke #
         
-          (nag.c <- r.squaredLR(modDelta, null = nullmod.nore)) # 0.31 explained by model
+          (nag.c <- r.squaredLR(modDelta, null = nullmod.nore)) # 0.31 explained by delta model
           (nag.c2 <- r.squaredLR(modDens, null = nullmod.nore)) # 0.30 explailed by dens model
-          (nag.m <- r.squaredLR(mod, null = nullmod.re)) # 0.12 explained by fixed effects alone    
+          (nag.m <- r.squaredLR(modDelta, null = nullmod.re)) # 0.12 explained by fixed effects alone    
         
-        
-        # store nagelkerke for moderately-supported models
-        
-        okmodr2 <- data.frame(modname = NA, nagr2 = NA)
-        
-        for(i in 1:length(modlist)) {
-          
-         okmodnm <- modnames[[i]]
-         okmod <- modlist[[i]]
-         nag <- r.squaredLR(okmod, null = nullmod.nore)
-         
-         okmodr2[i,1] <- okmodnm
-         okmodr2[i,2] <- attr(nag, "adj.r.squared")
-         
-        }
-        
-        okmoddat <- left_join(okmoddat, okmodr2, by = "modname")
-        write.csv(okmoddat, "results-okmodels-feb.csv", row.names=F)      
 
-               
+        
          
-      #### ROC per behavior ####
+      #### ROC per behavior (just out of curiosity; probably not mathematically sound) ####
         
         
         #### predict probability of each behavior type ####
@@ -766,7 +693,7 @@
         prefClass <- performance(predClass, "tpr", "fpr")
         BMauc <- performance(predClass, measure = "auc")
         auc <- as.numeric(BMauc@y.values)
-        auc # 0.69, acceptable only if you round up...
+        auc # 0.69, acceptable if you round up...
         
         
         # auc - resident
@@ -774,16 +701,16 @@
         prefClass <- performance(predClass, "tpr", "fpr")
         BMauc <- performance(predClass, measure = "auc")
         auc <- as.numeric(BMauc@y.values)
-        auc # 0.68, acceptable only if you round up...
+        auc # 0.68, acceptable if you round up...
         
-        (0.72+0.69+0.68)/3 # 0.696 avg all, prob totally invalid math
+        (0.72+0.69+0.68)/3 # 0.696 avg all
         
         
         # assess percentage of correct predictions
         preds$matchBehav = ifelse(preds$actualBehav == preds$predBehav, 1, 0)
         length(which(preds$matchBehav == 1)) / nrow(preds)
         # model predicts correctly 59% of the time
-        # which is better than a random guess so i got that going for me which is nice
+        # which is better than a random guess (33%) so i got that going for me which is nice
         # and that value aligns well with bayesian conceptions of acceptable model fit
         
 
@@ -864,7 +791,7 @@
     #### Effects per herd ####
 
       
-         # transparent plot to pathetically paste over bar graph (use delta model bc best supported)
+         # transparent plot to paste over bar graph (use delta model bc best supported)
          p <- ggplot(herdeffect, 
            aes(y = Est, x = Herd, ymin = CIlow, ymax = CIhigh)) +
            geom_point() +
@@ -931,7 +858,7 @@
                 ## sanity check, both should = 1
                 sum(predprobDelta[1]+predprobDelta[2]+predprobDelta[3])
                 sum(predprobDelta[4]+predprobDelta[5]+predprobDelta[6])
-                    ## sanity check, both should = 1
+                ## sanity check, both should = 1
                 sum(predprobDens[1]+predprobDens[2]+predprobDens[3])
                 sum(predprobDens[4]+predprobDens[5]+predprobDens[6])
     
@@ -951,8 +878,8 @@
         ## plot predictions ##
             
             ## read in stord data from above
-            newdatDelta <- read.csv("predictions-topmod-feb-delta.csv")
-            newdatDens <- read.csv("predictions-topmod-feb-dens.csv")
+            # newdatDelta <- read.csv("predictions-topmod-feb-delta.csv")
+            # newdatDens <- read.csv("predictions-topmod-feb-dens.csv")
             
             ## pull random subsample of 10000 predictions (takes forEVer otherwise)
             subdatDelta <- newdatDelta[sample(nrow(newdatDelta), 10000),] 
@@ -1001,6 +928,35 @@
             
 
 
+            
+            ## deltaFor on Ag - color for presentations
+            pp.df <- ggplot(
+              subdatDelta[subdatDelta$irrig == 1,], 
+              aes(
+                x = deltaFor, 
+                y = predprobDelta, 
+                colour = behavO#,
+                #linetype = behavO # need to play with this for legend to work
+                )
+              ) +
+              geom_smooth(se = FALSE) +
+              scale_color_hue(name = "", labels = c("Resident", "Intermediate", "Migrant")) +
+              labs(
+                x = "Forage difference \n (maxNDVI outside - inside winter range)", 
+                y = "Predicted probability",
+                title = "Agriculture on winter range") +
+              theme_minimal() +
+              theme(text = element_text(size=20), plot.title = element_text(hjust = 0.5)) 
+            
+            
+
+            ggsave("./Plots/deltaFor-col.jpg",
+              plot = pp.df,
+              device = "jpeg",
+              dpi = 600)             
+            
+            
+            
             ## deltaFor on Ag - b&w for thesis
             pp.df.bw <- ggplot(
               subdatDelta[subdatDelta$irrig == 1,], 
@@ -1027,35 +983,8 @@
               units = "cm",
               width = wcol2,
               height = wcol2/2)               
-            
-            
-            
-            
-            ## deltaFor on Ag
-            pp.df <- ggplot(
-              subdatDelta[subdatDelta$irrig == 1,], 
-              aes(
-                x = deltaFor, 
-                y = predprobDelta, 
-                colour = behavO#,
-                #linetype = behavO # need to play with this for legend to work
-                )
-              ) +
-              geom_smooth(se = FALSE) +
-              scale_color_hue(name = "", labels = c("Resident", "Intermediate", "Migrant")) +
-              labs(
-                x = "Forage difference \n (maxNDVI outside - inside winter range)", 
-                y = "Predicted probability",
-                title = "Agriculture on winter range") +
-              theme_minimal() +
-              theme(text = element_text(size=20), plot.title = element_text(hjust = 0.5)) 
-            
-            
 
-            ggsave("./Plots/deltaFor-col.jpg",
-              plot = pp.df,
-              device = "jpeg",
-              dpi = 600)               
+            
             
             
             ## dens on ag
@@ -1069,10 +998,9 @@
               theme_minimal() +
               theme(text = element_text(size=20), plot.title = element_text(hjust = 0.5)) 
  
-            ## export each
+
             
- 
-            
+            ## export relevant plots from above with journal-specific standards
             ggsave("./Plots/predFor-nogray-feb.jpg", 
               plot = pp.pf, 
               device = "jpeg",
@@ -1121,7 +1049,7 @@
           ylim(low = 0, high = 5)
         
         
-        ## separate plots of just densOwn, Age, dens:irrig (MT TWS)
+        ## separate plots of just densOwn, Age, dens:irrig (for MT TWS presn)
         p.do <- ggplot(avgors[avgors$cov == "densOwnCtr",], 
           aes(y = OR, x = cov, ymin = ciLow85, ymax = ciHigh85)) +
           geom_point(size = 3) +
@@ -1214,25 +1142,6 @@
         
         #### profile likelihood ####
         
-        # whatever that means
         pr1 <- profile(topmod2, alpha=1e-4)
         pr1 # this is asymmetric, therefore asymmetric confidence intervals are most appropriate
-        
-        
-        
-
-
-        
-
-     
-                
-                
-
-
-        
-        
-#### [save all the things] ####         
-           
-  save.image("mig-feb.Rdata")   
-      
 

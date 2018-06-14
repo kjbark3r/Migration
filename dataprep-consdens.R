@@ -55,9 +55,9 @@
       
       
 
-### ### ### ### ### ### ### ### ### ### ##
-####  |COMBINING DEAN'S POINT COUNTS|  ###
-### ### ### ### ### ### ### ### ### ### ##
+### ### ### ### ### ### ### ### ### ### ###
+####  |COMBINING DEAN'S POINT COUNTS|  ####
+### ### ### ### ### ### ### ### ### ### ###
  
 
     ### ### ### ### #
@@ -201,9 +201,9 @@
         
         
         
-### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
-####  |ASSESSING OVERLAP TO DETERMINE COMBINED GROUPS|  ###
-### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+### ### ### ### ### ###  ### ### ### ### ### ### ### ### ###
+####  |ASSESSING OVERLAP TO DETERMINE COMBINED GROUPS|  ####
+### ### ### ### ### ###  ### ### ### ### ### ### ### ### ### 
         
 
         
@@ -246,8 +246,7 @@
       
            
           ## estimate kde for each population
-          popnwinuds <- kernelUD(spdf.sp[,"Herd"], h = "href")
-                                   #, extent = 2) # need extent > default of 1 
+          popnwinuds <- kernelUD(spdf.sp[,"Herd"], h = "href") 
           popnwinkdes <- getverticeshr(popnwinuds, percent = 95)
           plot(popnwinkdes)
                 
@@ -262,9 +261,8 @@
           spdf.sp.i <- spTransform(spdf.i, stateplane)
       
            
-          ## estimate kde for each population
+          ## estimate kde for each individual
           indivwinuds <- kernelUD(spdf.sp.i[,"AnimalID"], h = "href")
-                                   #, extent = 2) # need extent > default of 1 
           indivwinkdes <- getverticeshr(indivwinuds, percent = 95)
           plot(indivwinkdes, add = T, col = "blue")
                 

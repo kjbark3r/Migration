@@ -54,10 +54,10 @@
   
   
   
-  #### "Raw" data ####
+  #### "Raw" data (from dataprep-elkdb.R) ####
   
-    rawlocs <- read.csv("locs.csv")
-    herds <- read.csv("popns-yrs.csv")
+    rawlocs <- read.csv("locs.csv")  
+    herds <- read.csv("popns-yrs.csv")  
     herdsonly <- dplyr::select(herds, Herd)
 
   
@@ -291,7 +291,7 @@
       
     ## Identify top model for each individual ##
       
-      # don't consider mixmig or nomad (see notes)
+      # don't consider mixmig or nomad (see thesis ch2 methods for more info)
       mtop <- topmvmt(mref1, omit = c("mixmig", "nomad"))
       topmods <- data.frame(AnimalID = modindivs, PrelimClassn = names(mtop))
       write.csv(topmods, file = "./rNSDresults/initialclassns.csv", row.names=F)

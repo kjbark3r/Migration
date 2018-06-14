@@ -18,7 +18,7 @@
   
     library(raster) # ...rasters...
     library(sp) # spatial
-    library(rgeos) # gIntersection (clip spatial opjs)
+    library(rgeos) # gIntersection (clip spatial objects)
     library(rgdal) # projections; working with shps
     library(maptools) # writeSpatialShape
     library(beepr) # alarm when code finishes
@@ -80,12 +80,13 @@
       
 
       
-      # buffered popn winter ranges of (to crop cadastral to)
+      # buffered winter range area of all herds 
+      # (just to crop cadastral for faster processing, from homeranges.R and ArcMap)
       hrs <- shapefile("../GIS/Shapefiles/Elk/IndivHRs/AllWinHRsMergedBuff")
       
 
 
-      # identify relevant cadastral files
+      # identify relevant cadastral files (from mt.gov, see thesis ch2 methods)
        files.cad <- list.files(
             path = "../DatabasesEtc/Statewide/LandOwnership",
             pattern = ".shp$",

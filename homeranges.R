@@ -54,8 +54,8 @@
       mutate(Sex = factor(Sex))
     allindivs <-  data.frame(AnimalID = unique(allcowlocs$AnimalID))
     
-    # Females to use in actual model
-    modindivs <- read.csv("modindivs.csv")
+    # Females to use in actual model (behavindivs.csv minus "ski hill" NSERP elk)
+    modindivs <- read.csv("modindivs.csv") 
     locs <- allcowlocs %>%
       semi_join(modindivs, by = "AnimalID")
     
@@ -90,7 +90,7 @@
 
     # winter locations (for density estimates)
     popnlocsfeb <- allcowlocs %>%
-        # only locns collected during winter
+        # only locns collected during winter (i.e. february; see thesis ch2 methods)
         filter(Month == 2) %>%
         # only keep indivs from popns and years interest
         semi_join(popnyrs, by = c("Herd", "Year")) %>%
