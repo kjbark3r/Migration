@@ -1,6 +1,6 @@
 # figuring out actual modeling
 
-# kristinbarker spr 2018
+# kristinbarker spr 2018 - fall2018
 
 
 
@@ -3470,6 +3470,7 @@ sf <- function(y) {
     
     # if can't detect an effect of density should i remove that main effect?
     
+    
     t22 <- clmm(behavO ~ predFor + irrig + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = test) 
 
     summary(t22)    
@@ -3480,22 +3481,152 @@ sf <- function(y) {
     
     # hm ok so you really need to be thinking about this in terms of your topmodel
     
+    
     summary(mod)
     # can't detect an effect of deltafor alone
+    
     
     # so what happens if you remove it... is that icky??
     
     tmod <- clmm(behavO ~ predFor + irrig + deltaFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat) 
     summary(tmod)
-      
+ 
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## #        
+#### ADDING YR RANDOM EFFECT TO MODELS ####
+## ## ## ## ## ## ## ## ## ## ## ## ## ## #
     
     
-    #### oops rabbithole. pct varn by herd alone. ####
+    ## GOAL: Nest herd in year and rerun everything
     
-              # what about vs just herd alone?
-          mod.herd <- clm(behavO ~ Herd, Hess = TRUE, nAGQ = 10, data = dat)
-          summary(mod.herd)
-          r.squaredLR(mod.herd, nullmod.nore)
-          # never mind, can't estimate this model
+    ## Step 1: figure out correct syntax for clmm/clmm2 nesting
+    ## Step 2: run one model as it was before, also w nested RE, look at diffs
+    ## Step 3: redo everything...
+    
+    #### Syntax attempts ####
+    
+    modOrig <- clmm(behavO ~ deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+    modOrig
+    
+    ## from lme4
+    
+    modCrossed <- clmm(behavO ~ deltaFor + (1|Herd) + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    # Error: Quadrature methods are not available with more than one random effects term
+    
+    # try clmm2 instead
+    
+    modCrossed <- clmm2(behavO ~ deltaFor + (1|Herd) + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    # Error in model.matrix.default(TermsL, L, contrasts) : variable 1 has no levels
+    # plus warning messages about | not being meaningful for factors (Herd) (??)
+    
+    # back to clmm, try diff syntax
+    
+    modNest <- clmm(behavO ~ deltaFor + (1|Herd/YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    # Error: Matrices must have same number of columns in rbind2(argl[[i]], r)
+    # plus even more warnings, 
+      # In YOI:Herd : numerical expression has 298 elements: only the first used
+      # no. random effects (=2002) >= no. observations (=2002) for term: (1 | YOI:Herd) & >= no. observations (=298) 
+    # oh oops i think the syntax is supposed to be (1 | biggerThing \ thingNestedInIt)
+    
+    modNest <- clmm(behavO ~ deltaFor + (1|YOI/Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+    # damn, same as above
+    
+    # try this syntax in clmm2?
+    modNest <- clmm2(behavO ~ deltaFor + (1|YOI/Herd), Hess = TRUE, nAGQ = 10, dat = olddat) 
+    # oh that's new
+    # Error in ucminf(getPar(rho), function(par) getNll(rho, par), function(par) getGnll(rho,  :
+      # names(control) %in% names(con) are not all TRUE
+    # and warnings: In Ops.factor(YOI, Herd) : '/' not meaningful for factors, plus another confusing one
+    
+    ## ok one issue (likely of many...) might be that you don't have enough herds per year?
+    ## max number herds per yr = 3, min = 1. Not much grouping there so may not be able to nest
+    ## but if i don't nest herd in year
+    ## how would it distinguish bt the effect of 2006 vs madison? (mad is only herd in 2006)
+    
+    modTest <- clmm(behavO ~ 1 + (1|YOI/Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+    modTest <- clmm(behavO ~ 1 + (1|YOI) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)    
+    modTest <- clmm2(behavO ~ 1 + (1|YOI) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat) 
+    str(olddat)
+    # oh duh yr needs to be factor now
+    tdat <- olddat %>% mutate(Yr = as.factor(YOI))
+    modTest <- clmm2(behavO ~ 1 + (1|Yr) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)    
+    modTest <- clmm2(behavO ~ 1 + (1|Herd) , Hess = TRUE, nAGQ = 10, dat = tdat)   
+    # just kidding it doesn't
+    
+    # ok quick playtime w no notes
+    modOrig <- clmm(behavO ~ deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
+    modTest <- clmm(behavO ~ deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)    
+    modTest <- clmm(behavO ~ deltaFor + (1|YOI), Hess = TRUE, nAGQ = 10, dat = tdat)
+    modTest <- clmm(behavO ~ deltaFor + (1|Yr), Hess = TRUE, nAGQ = 10, dat = tdat)   
+    modTest
+    modOrig
+    
+    modTest2 <- clmm(behavO ~ deltaFor + (1|Yr) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)            
+    modTest2 <- clmm2(behavO ~ deltaFor + (1|Yr) + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat) #newp
+    
+    modTest2 <- clmm(behavO ~ deltaFor + Yr + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat) 
+    # hessian is numerically singular: parameters are not uniquely determined
+    modTest2 <- clmm(behavO ~ deltaFor + Herd + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat) 
+    # ditto above, plus Absolute convergence criterion was met, but relative criterion was not met
+    modTest2 <- clmm(behavO ~ deltaFor + Herd + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat) 
+    modTest2 <- clmm(behavO ~ deltaFor + Herd + YOI, Hess = TRUE, nAGQ = 10, dat = olddat) 
+    # oooook it's just an issue of trying to look at herd and year at the same time
+    # because there's still an error when i include them both in the same model
+    # design is column rank deficient so dropping 1 coef
+    # oh wait next error is bc i didn't have any random effects, shouldn't be using clmm
+    modTest2 <- clm(behavO ~ deltaFor + Herd + YOI, Hess = TRUE, nAGQ = 10, dat = olddat) 
+    # ok yeah
+    # Warning message:
+    # (1) Hessian is numerically singular: parameters are not uniquely determined 
+    # In addition: Absolute convergence criterion was met, but relative criterion was not met 
+    
+    ## mmk so can't do both herd and year effect
+    ## so i need to decide whether it makes more sense to do year rather than herd
+    ## switching to word for pondering
+    
+    ## ok just for my personal info, rerunning model selxn with yr in place of herd
+    
+    modTest3 <- clmm2(behavO ~ deltaFor + (1|Herd/AnimalID), Hess = TRUE, nAGQ = 10, dat = olddat)    
+    
+    
+    #### a priori models ####
+    
+    m1 <- clmm(behavO ~ deltaFor + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m2 <- clmm(behavO ~ predFor + deltaFor + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m3 <- clmm(behavO ~ predFor + deltaFor + deltaFor:predFor + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m4 <- clmm(behavO ~ predFor + deltaFor + Dens + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m5 <- clmm(behavO ~ predFor + deltaFor + Dens + deltaFor:Dens + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m6 <- clmm(behavO ~ predFor + deltaFor + Old + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m7 <- clmm(behavO ~ predFor + deltaFor + Old + deltaFor:Old + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m8 <- clmm(behavO ~ predFor + deltaFor + Old + Dens + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m9 <- clmm(behavO ~ predFor + deltaFor + Old + Dens + Old:Dens + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m10 <- clmm(behavO ~ densOwn + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m11 <- clmm(behavO ~ predFor + deltaFor + densOwn + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m12 <- clmm(behavO ~ predFor + deltaFor + densOwn + deltaFor:predFor + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m13 <- clmm(behavO ~ predFor + deltaFor + densOwn + deltaFor:densOwn + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m14 <- clmm(behavO ~ densOwn + Old + densOwn:Old + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m15 <- clmm(behavO ~ predFor + deltaFor + densOwn + Old + densOwn:Old + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m16 <- clmm(behavO ~ irrig + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m17 <- clmm(behavO ~ densOwn + irrig + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m18 <- clmm(behavO ~ predFor + deltaFor + irrig   + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m19 <- clmm(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)  
+    m20 <- clmm(behavO ~ predFor + deltaFor + irrig + predFor:irrig + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m21 <- clmm(behavO ~ irrig + Dens + irrig:Dens + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m22 <- clmm(behavO ~ predFor + irrig + Dens + irrig:Dens + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)  
+    m23 <- clmm(behavO ~ predFor + irrig + Old + Dens + Old:Dens + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)  
+    m24 <- clmm(behavO ~ densOwn + irrig + Dens + irrig:Dens + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat)
+    m25 <- clmm(behavO ~ densOwn + irrig + Dens + densOwn:Dens + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat) 
+    m26 <- clmm(behavO ~ predFor + irrig + densOwn + irrig:densOwn + (1|YOI), Hess = TRUE, nAGQ = 10, dat = olddat) 
+    
+    
+    # compete with AICc 
+    mods <- list()
+    modnms <- paste0("m", rep(1:26))
+    for (i in 1:length(modnms)) { mods[[i]] <- get(modnms[[i]]) }
+    aictab(cand.set = mods, modnames = modnms)
+    aictab2 <- data.frame(aictab(cand.set = mods, modnames = modnms))    
+    
+    
+    
     
     
