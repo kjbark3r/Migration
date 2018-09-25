@@ -3628,5 +3628,62 @@ sf <- function(y) {
     
     
     
+    ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## #       
+    #### CHECK OUT YEAR INTERACTED WITH DELTAFOR FOR FUNZIES ####
+    ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## #
+    
+    
+    tdat <- olddat %>% mutate(Yr = as.factor(YOI))
+    
+    m1 <- clmm(behavO ~ deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m2 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m3 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + deltaFor:predFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m4 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m5 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + Dens + deltaFor:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m6 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m7 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + Old + deltaFor:Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m8 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + Old + Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m9 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + Old + Dens + Old:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m10 <- clmm(behavO ~ densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m11 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m12 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + densOwn + deltaFor:predFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m13 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + densOwn + deltaFor:densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m14 <- clmm(behavO ~ densOwn + Old + densOwn:Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m15 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + densOwn + Old + densOwn:Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m16 <- clmm(behavO ~ irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m17 <- clmm(behavO ~ densOwn + irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m18 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + irrig   + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m19 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + irrig + deltaFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)  
+    m20 <- clmm(behavO ~ predFor + deltaFor + Yr + deltaFor*Yr + irrig + predFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m21 <- clmm(behavO ~ irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m22 <- clmm(behavO ~ predFor + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)  
+    m23 <- clmm(behavO ~ predFor + irrig + Old + Dens + Old:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)  
+    m24 <- clmm(behavO ~ densOwn + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat)
+    m25 <- clmm(behavO ~ densOwn + irrig + Dens + densOwn:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat) 
+    m26 <- clmm(behavO ~ predFor + irrig + densOwn + irrig:densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = tdat) 
+    
+    
+    # compete with AICc 
+    mods <- list()
+    modnms <- paste0("m", rep(1:26))
+    for (i in 1:length(modnms)) { mods[[i]] <- get(modnms[[i]]) }
+    aictab(cand.set = mods, modnames = modnms)
+    aictab4 <- data.frame(aictab(cand.set = mods, modnames = modnms))
+    
+    
+    ## mmk still same top model, and then year subsumes effect of predfor so that seems less impt
+    
+    
+  #### up next, seeing how many yrs of data actually had per herd ####
+    
+    cd <- read.csv("capdat-allindivs.csv") %>%
+      filter(Sex == "F") %>%
+      mutate(Yr = substr(CaptureDate, 0, 4)) %>%
+      dplyr::select(Herd, Yr) %>%  
+      distinct() %>%
+      group_by(Herd) %>%
+      summarise(nYr = n()) %>%
+      semi_join(popdat, by = "Herd")
+    # 25% (4/16) of herds only had one year of data anyway.
     
     
