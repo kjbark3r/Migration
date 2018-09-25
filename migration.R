@@ -37,13 +37,17 @@
     wd_workcomp <- "C:\\Users\\kristin.barker\\Documents\\GitHub\\Migration"
     wd_laptop <- "C:\\Users\\kjbark3r\\Documents\\GitHub\\Migration"
     wd_worklaptop <- "C:\\Users\\kristin\\Documents\\Migration"
+    wd_UCB <- "C:\\Users\\Kristin\\Box Sync\\Documents\\PreUCB\\Migration"
     if (file.exists(wd_workcomp)) {setwd(wd_workcomp)
     } else {
       if(file.exists(wd_laptop)) {setwd(wd_laptop)
       } else {
-        setwd(wd_worklaptop)
+        if(file.exists(wd_UCB)) {setwd(wd_UCB)
+          } else {setwd(wd_worklaptop)
+          }
       }
     }
+
     rm(wd_workcomp, wd_laptop, wd_worklaptop)
     
 
