@@ -129,4 +129,6 @@
       
  
         
-        
+#### Assessing potential effects of sightability ####
+         
+   windens <- readOGR("E:\\UMT_2018\\Documents\\GIS\\Shapefiles\\Elk\\PopnHRs", layer ='WinHRcombosFeb')

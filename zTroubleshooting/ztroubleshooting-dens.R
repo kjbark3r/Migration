@@ -273,3 +273,107 @@ for (i in 1:length(herdstouse)) {
      driver = "ESRI Shapefile",
      overwrite = TRUE) 
 }
+
+
+
+#### quantifying effects of potential inaccuracies in population estimates due to sightability diffs ####
+
+#### Packages ###
+
+library(sp) # spatial, over
+library(rgeos) # buffer, centroid
+library(rgdal) # latlong/stateplane conversions; readOGR
+library(maptools) # writeSpatialShape
+library(raster) # intersect
+library(dplyr) # joins, data work, general awesomeness
+
+
+#### Working directory ###
+
+wd_workcomp <- "C:\\Users\\kristin.barker\\Documents\\GitHub\\Migration"
+wd_laptop <- "C:\\Users\\kjbark3r\\Documents\\GitHub\\Migration"
+wd_worklaptop <- "C:\\Users\\kristin\\Documents\\Migration"
+wd_UCB <- "C:\\Users\\Kristin\\Box Sync\\Documents\\PreUCB\\Migration"
+if (file.exists(wd_workcomp)) {setwd(wd_workcomp)
+} else {
+  if(file.exists(wd_laptop)) {setwd(wd_laptop)
+  } else {
+    if(file.exists(wd_UCB)) {setwd(wd_UCB)
+    } else {setwd(wd_worklaptop)
+    }
+  }
+}
+
+rm(wd_workcomp, wd_laptop, wd_worklaptop)
+
+#### Projections ###
+
+latlong <- CRS("+init=epsg:4326")
+stateplane <- CRS("+init=epsg:2818")
+
+
+
+#### Population year info ###
+
+popnyrs <- read.csv("popns-yrs.csv")
+
+
+#### Winter HR polygons (HRs created in homeranges.R; popnHRs combined and processed in ArcMap) ###
+
+windens <- readOGR("E:\\UMT_2018\\Documents\\GIS\\Shapefiles\\Elk\\PopnHRs", layer ='WinHRcombosFeb')
+
+sight <- windens@data %>%
+  arrange(popnEst) %>%
+  mutate(rank = row_number(),
+         pct80 = popnEst * 1.8,
+         pct60 = popnEst * 1.6)
+
+## ok... what am i doing here... i'm curious whether any of the population estimates of one herd
+## fall within the range of popnEst - pct60 of any other herd
+
+for(i in 1:nrow(sight)) {
+  
+  herd = sight[i, "id"]
+  est = sight[1, "popnEst"]
+  
+  print(any(est >= sight$popnEst & est <= sight$pct60 & herd != sight$id))
+  #print(any(est >= sight$popnEst & est <= sight$pct80 & herd != sight$id))  
+  
+  
+}
+
+
+# oh actually makes more sense to look at how it would affect density estimates specifically, duh
+
+sight <- windens@data %>%
+  arrange(consDens) %>%
+  mutate(id = as.character(id),
+         rank = row_number(),
+         pct80 = popnEst * (5/4),
+         pct60 = popnEst * (5/3),
+         dens80 = pct80/area,
+         dens60 = pct60/area) %>%
+  dplyr::select(id, rank, consDens, dens80, dens60)
+
+
+for(i in 1:nrow(sight)) {
+  
+  herd = sight[i, "id"]
+  est = sight[1, "dens80"]
+  dat = sight[sight$id != herd,]
+  
+  for(j in 1:nrow(dat)) {
+    
+    if(est >= dat[j, "consDens"] & est <= dat[j, "dens80"]) print(dat[j,])
+    
+  }
+
+}
+
+
+
+
+
+
+
+
