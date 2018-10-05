@@ -345,35 +345,63 @@ for(i in 1:nrow(sight)) {
 
 # oh actually makes more sense to look at how it would affect density estimates specifically, duh
 
-sight <- windens@data %>%
+windens <- readOGR("E:\\UMT_2018\\Documents\\GIS\\Shapefiles\\Elk\\PopnHRs", layer ='WinHRcombosFeb')
+
+# calculate densities if sightability had been 60% or 80%
+dens <- windens@data %>%
   arrange(consDens) %>%
   mutate(id = as.character(id),
          rank = row_number(),
          pct80 = popnEst * (5/4),
          pct60 = popnEst * (5/3),
          dens80 = pct80/area,
-         dens60 = pct60/area) %>%
-  dplyr::select(id, rank, consDens, dens80, dens60)
+         dens60 = pct60/area,
+         diff80 = dens80 - consDens,
+         diff60 = dens60 - consDens) %>%
+  dplyr::select(id, rank, consDens, dens80, dens60, diff80, diff60)
 
 
-for(i in 1:nrow(sight)) {
+# create herd name abbreviations
+abbvs <- c("TobRt", "ElkH", "Sap", "SilRn", "Pio", "Blk", "Grly", "WFk", "EFk", "NMad", "Dom", "MlCk", "CkFk", "Mad")
+
+
+# for each herd,
+for(i in 1:nrow(dens)) {
   
-  herd = sight[i, "id"]
-  est = sight[1, "dens80"]
-  dat = sight[sight$id != herd,]
+  # start with original data
+  tmpdat <- dens  
   
-  for(j in 1:nrow(dat)) {
-    
-    if(est >= dat[j, "consDens"] & est <= dat[j, "dens80"]) print(dat[j,])
-    
-  }
+  # replace the pct60 and pct80 estimates with the actual estimate for that herd
+  tmpdat[i, "dens80"] = tmpdat[i, "consDens"]
+  tmpdat[i, "dens60"] = tmpdat[i, "consDens"] 
+  
+
+  # add new column of updated ranks under these sightability changes
+  dens[paste0("r80", abbvs[i])] <- rank(tmpdat$dens80)  
+  dens[paste0("r60", abbvs[i])] <- rank(tmpdat$dens60)    
 
 }
 
+write.csv(dens, file = "densitySightability.csv")
+
+# duh, you're replacing them iteratively, need to return tot he original dataframe each time
 
 
 
 
+## useless
 
+dat60 <- matrix(ncol = nrow(sight)+1)
+colnames(dat60) <- c("orig", "TobRt", "ElkH", "Sap", "SilRn", "Pio", "Blk", "Grly", "WFk", "EFk", "NMad", "Dom", "MlCk", "CkFk", "Mad")
+dat60$orig <- sight$rank
+dat60 <- data.frame(dat60)
 
+newranks80 <- rank(tmpdat$dens80)
+newranks60 <- rank(tmpdat$dens60)
 
+# 3. create vector of updated ranks
+# 2. determine how the ranks would change if compared a correct herd estimate to underestimated herds
+assign(paste0("r80", abbvs[i]), rank(tmpdat$dens80))
+assign(paste0("r60", abbvs[i]), rank(tmpdat$dens60))  
+
+mutate(tmpdat, assign(paste0("r80", abbvs[i])), rank(tmpdat$dens80))

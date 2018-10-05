@@ -372,27 +372,10 @@
       hist(herdsums$ppnIrrig)
       summary(herdsums$ppnIrrig)
       #IQR: > 0.8361-0.3956 = 0.4405
-      
-        
-        
-  #### Prediction data ####
-        
-      ## i have no idea what this does tbh but predict.clm2 rdocumentation includes it so...
-      options(contrasts = c("contr.treatment", "contr.poly"))
-      
-
-      ## duplicate data for each response category (make all possible combos of covs for ea behav)
-      dupedat <- expand.grid(behavO = unique(dat$behavO), 
-        predFor = unique(dat$predFor),
-        deltaFor = unique(dat$deltaFor),
-        irrig = as.factor(c(0, 1)),
-        Dens = unique(dat$Dens),
-        Old = as.factor(c(0, 1)),
-        densOwn = unique(dat$densOwn))
-    
+  
 
     
-  #### check covariates for collinearity & assess univariate relationships ####
+  #### Check covariates for collinearity & assess univariate relationships ####
       
       dat.cor <- dat %>%
         dplyr::select(behavO, predFor, deltaFor, Dens, Old, densOwn, irrig)
@@ -839,192 +822,102 @@
          
         
     #### Prediction plots - Top models ####
-      
-      
-        ## make predictions ##
          
-         # specify models with clmm2 to allow prediction
-  
-           mod2Delta <- clmm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, 
-              random = Herd, Hess = TRUE, nAGQ = 10, dat = dat, threshold = "flexible")  
-            summary(mod2Delta) # Hess = 18794.45 => model not ill-defined (see clmm2 tutorial)
-            
-              
-           mod2Dens <- clmm2(behavO ~ predFor + Dens + irrig + Dens:irrig, 
-              random = Herd, Hess = TRUE, nAGQ = 10, dat = dat, threshold = "flexible")  
-          summary(mod2Dens) # Hess = 29786.17 => model not ill-defined (see clmm2 tutorial)
+         
+       #### a) create data to predict on ####
+         
+         
+         # number of samples to draw per covariate #
+         nobs <- 1000
+         
+             # irrig: bernoulli distn with prob = mean of irrig data
+             irrig <- rbinom(nobs, 1, mean(as.numeric(as.character(dat$irrig))))
+             
+             # predFor: normal dist with mean from data, 1/3 sd to keep within data range
+             predFor <- rnorm(nobs, mean(dat$predFor), sd(dat$predFor)/3)
+             
+             # deltaFor: exponential distn with shape param = 0.4 
+             deltaFor <- rexp(nobs, 0.4) # 0.4 trial & error, closest to range of data 
+     
+             # Dens: exponential distn with shape param = 0.3
+             Dens <- rexp(nobs, 0.3) # trial & error again 
+         
+             
+             
+         # combine all samples, then duplicate x3 (once for each behav type) #
+         preds <- cbind(irrig, predFor, deltaFor, Dens)
+         predDat <- data.frame(rbind(preds, preds, preds))
+         predDat$behavO <- c(rep("resident", nobs), rep("other", nobs), rep("migrant", nobs))
 
-    
-            ## predict probability of falling into each response category given those same data
-            predprobDelta <- predict(mod2Delta, newdata = dupedat)
-            predprobDens <- predict(mod2Dens, newdata = dupedat)
-                        
-                ## sanity check, both should = 1
-                sum(predprobDelta[1]+predprobDelta[2]+predprobDelta[3])
-                sum(predprobDelta[4]+predprobDelta[5]+predprobDelta[6])
-                ## sanity check, both should = 1
-                sum(predprobDens[1]+predprobDens[2]+predprobDens[3])
-                sum(predprobDens[4]+predprobDens[5]+predprobDens[6])
-    
-            ## combine predictions with data used to predict
-            newdatDelta <- cbind(dupedat, predprobDelta)
-            head(newdatDelta)
-            
-            ## combine predictions with data used to predict
-            newdatDens <- cbind(dupedat, predprobDens)
-            head(newdatDens)
-            
-            ## store
-            write.csv(newdatDelta, file = "predictions-topmod-feb-delta.csv", row.names = F)
-            write.csv(newdatDens, file = "predictions-topmod-feb-dens.csv", row.names = F)    
-            
-            
-        ## plot predictions ##
-            
-            ## read in stord data from above
-            # newdatDelta <- read.csv("predictions-topmod-feb-delta.csv")
-            # newdatDens <- read.csv("predictions-topmod-feb-dens.csv")
-            
-            ## pull random subsample of 10000 predictions (takes forEVer otherwise)
-            subdatDelta <- newdatDelta[sample(nrow(newdatDelta), 10000),] 
-            subdatDelta$behavO <-  factor(subdatDelta$behav, levels = c("resident", "other", "migrant"), ordered = TRUE)
-            subdatDens <- newdatDens[sample(nrow(newdatDens), 10000),]
-            subdatDens$behavO <-  factor(subdatDens$behav, levels = c("resident", "other", "migrant"), ordered = TRUE)
+         
+         # format columns same as in dat #
+         predDat <- predDat %>%
+           mutate(behavO = factor(behavO, levels = c("resident", "other", "migrant"), ordered = TRUE),
+                  irrig = factor(irrig))
+         
+     
+         
+         
+       #### b) predict probability of each behav given each random draw of covariates ####
 
-            
-            ## predFor - color
-            pp.pf <- ggplot(subdatDelta, aes(x = predFor, y = predprobDelta, colour = behavO)) +
-              geom_smooth(se = FALSE) +
-              scale_color_hue(name = "", labels = c("Resident", "Intermediate", "Migrant")) +
-              labs(
-                x = "Forage predictabilty \n (- 6-yr stdev of NDVI amplitude)", 
-                y = "Predicted probability") +
-              theme_minimal() +
-              theme(text = element_text(size=20), plot.title = element_text(hjust = 0.5))  
+         ## delta model (clmm2 required for prediction)
+         mod2Delta <- clmm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, 
+            random = Herd, Hess = TRUE, nAGQ = 10, dat = dat, threshold = "flexible")
+         summary(mod2Delta) # Hess = 18794.45 => model not ill-defined (see clmm2 tutorial)
+         predprobDelta <- predict(mod2Delta, newdata = predDat)
+         preddatDelta <- cbind(predDat, predprobDelta)
+          
+        ## density model (clmm2 required for prediction)
+        mod2Dens <- clmm2(behavO ~ predFor + Dens + irrig + Dens:irrig, 
+            random = Herd, Hess = TRUE, nAGQ = 10, dat = dat, threshold = "flexible")  
+        summary(mod2Dens) # Hess = 29786.17 => model not ill-defined (see clmm2 tutorial)
+        predprobDens <- predict(mod2Dens, newdata = predDat)
+        preddatDens <-cbind(predDat, predprobDens) 
 
-            ggsave("./Plots/predFor-col.jpg",
-              plot = pp.pf,
-              device = "jpeg",
-              dpi = 600)   
-            
-            
-            
-            ## predFor - b&w for thesis
-            pp.pf.bw <- ggplot(subdatDelta, aes(x = predFor, y = predprobDelta, linetype = behavO)) +
-              geom_smooth(se = FALSE, color = "black", size = 0.5) +
-              scale_linetype_manual(
-                values=c("solid", "dotdash", "dotted"), 
-                name = "", labels = c("Migrant", "Intermediate", "Resident")) +
-              labs(
-                x = "Forage predictabilty \n (- 6-yr stdev of NDVI amplitude)", 
-                y = "Predicted probability") +
-              theme_minimal() +
-              theme(text = element_text(size=18), plot.title = element_text(hjust = 0.5))  
-            
-
-            ggsave("./Plots/predFor-bw.jpg",
-              plot = pp.pf.bw,
-              device = "jpeg",
-              dpi = 600,
-              units = "cm",
-              width = wcol2,
-              height = wcol2/2)   
-            
-
-
-            
-            ## deltaFor on Ag - color for presentations
-            pp.df <- ggplot(
-              subdatDelta[subdatDelta$irrig == 1,], 
-              aes(
-                x = deltaFor, 
-                y = predprobDelta, 
-                colour = behavO#,
-                #linetype = behavO # need to play with this for legend to work
-                )
-              ) +
-              geom_smooth(se = FALSE) +
-              scale_color_hue(name = "", labels = c("Resident", "Intermediate", "Migrant")) +
-              labs(
-                x = "Forage difference \n (maxNDVI outside - inside winter range)", 
-                y = "Predicted probability",
-                title = "Agriculture on winter range") +
-              theme_minimal() +
-              theme(text = element_text(size=20), plot.title = element_text(hjust = 0.5)) 
-            
-            
-
-            ggsave("./Plots/deltaFor-col.jpg",
-              plot = pp.df,
-              device = "jpeg",
-              dpi = 600)             
-            
-            
-            
-            ## deltaFor on Ag - b&w for thesis
-            pp.df.bw <- ggplot(
-              subdatDelta[subdatDelta$irrig == 1,], 
-              aes(
-                x = deltaFor, 
-                y = predprobDelta, 
-                linetype = behavO)) +
-              geom_smooth(se = FALSE, color = "black", size = 0.5) +
-              scale_linetype_manual(
-                values = c("solid", "dotdash", "dotted"),
-                name = "", labels = c("Migrant", "Intermediate", "Resident")) +
-              labs(
-                x = "Summer forage difference \n (maxNDVI outside - inside winter range)", 
-                y = "Predicted probability",
-                title = "Agriculture on winter range") +
-              theme_minimal() +
-              theme(text = element_text(size=18), plot.title = element_text(hjust = 0.5)) 
-            
-  
-            ggsave("./Plots/deltaFor-bw.jpg",
-              plot = pp.df.bw,
-              device = "jpeg",
-              dpi = 600,
-              units = "cm",
-              width = wcol2,
-              height = wcol2/2)               
-
-            
-            
-            
-            ## dens on ag
-            pp.dn <- ggplot(subdatDens[subdatDens$irrig == 1,], aes(x = Dens, y = predprobDens, colour = behavO)) +
-              geom_smooth(se = FALSE) +
-              scale_color_hue(name = "", labels = c("Resident", "Intermediate", "Migrant")) +
-              labs(
-                x = "Index of conspecific density", 
-                y = "Predicted probability",
-                title = "Agriculture on winter range") +
-              theme_minimal() +
-              theme(text = element_text(size=20), plot.title = element_text(hjust = 0.5)) 
- 
-
-            
-            ## export relevant plots from above with journal-specific standards
-            ggsave("./Plots/predFor-nogray-feb.jpg", 
-              plot = pp.pf, 
-              device = "jpeg",
-              dpi = 600,
-              units = "cm",
-              width = wcol2)
-            ggsave("./Plots/deltaFor-nogray-feb.jpg", 
-              plot = pp.df, 
-              device = "jpeg",
-              dpi = 600,
-              units = "cm",
-              width = wcol2)            
-            ggsave("./Plots/dens-nogray-feb.jpg",
-              plot = pp.dn,
-              device = "jpeg",
-              dpi = 600,
-              units = "cm",
-              width = wcol2)
-
-   
+      
+        
+        #### c) plot predictions ####  
+        
+          
+          ## predFor - color
+          pp.pf <- ggplot(preddatDelta, aes(x = predFor, y = predprobDelta, colour = behavO)) +
+            geom_smooth(se = FALSE) +
+            geom_point() +
+            scale_color_hue(name = "", labels = c("Resident", "Intermediate", "Migrant")) +
+            labs(
+              x = "Forage predictabilty \n (- 6-yr stdev of NDVI amplitude)", 
+              y = "Predicted probability") +
+            theme_minimal() +
+            theme(text = element_text(size=20), plot.title = element_text(hjust = 0.5))  
+          pp.pf
+        
+          
+          ## predFor - b&w 
+          pp.pf.bw <- ggplot(preddatDelta, aes(x = predFor, y = predprobDelta, 
+                                               linetype = behavO, color = behavO)) +
+            geom_smooth(se = FALSE, color = "black", size = 1) +
+            scale_linetype_manual(
+              values=c("dotted", "dotdash", "solid"), 
+              name = "", labels = c("Resident", "Intermediate", "Migrant")) +
+            scale_color_grey() +
+            geom_point(size = 0.5) +
+            labs(
+              x = "Forage predictabilty \n (- 6-yr stdev of NDVI amplitude)", 
+              y = "Predicted probability") +
+            theme_minimal() +
+            theme(text = element_text(size=18), 
+                  plot.title = element_text(hjust = 0.5),
+                  legend.key.width = unit(1, 'cm')) +
+            theme(legend.title=element_blank(),
+                  text = element_text(size=20)) +
+            guides(color = guide_legend(override.aes = list(linetype = 0)),
+                   shape = guide_legend(override.aes = list(linetype = 0,
+                                                            size = 5))) 
+        
+        
+        
+        
+        
                  
     #### Coefficient estimates - Averaged model ####     
 
