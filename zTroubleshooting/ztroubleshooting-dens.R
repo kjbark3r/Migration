@@ -405,3 +405,275 @@ assign(paste0("r80", abbvs[i]), rank(tmpdat$dens80))
 assign(paste0("r60", abbvs[i]), rank(tmpdat$dens60))  
 
 mutate(tmpdat, assign(paste0("r80", abbvs[i])), rank(tmpdat$dens80))
+
+
+
+
+
+#### sightability take 2, now with canopy cover ####
+
+
+  library(raster) # ...rasters...
+  library(sp) # spatial
+  library(rgdal) # projections; working with shps
+  library(maptools) # writeSpatialShape
+  library(beepr) # exciting alarm when code finishes
+  library(dplyr) # joins, data work, general awesomeness
+  
+  setwd("C:\\Users\\Kristin\\Box Sync\\Documents\\PreUCB\\Migration")
+  
+  
+  ### Projections ###
+  
+  latlong <- CRS("+init=epsg:4326")
+  stateplane <- CRS("+init=epsg:2818")
+  
+  
+  
+  ### Population year info ###
+  
+  popnyrs <- read.csv("popns-yrs.csv")
+  
+  
+  ### Winter HR polygons ###
+  
+  windens <- readOGR("E:\\UMT_2018\\Documents\\GIS\\Shapefiles\\Elk\\PopnHRs", layer ='WinHRcombosFeb')
+  windens <- spTransform(windens, stateplane)
+
+  ### cover from my hero owen ###
+  
+  covRaw <- raster("E:\\Tree Cover\\perc_tree_2011.tif")
+  covProj <- projectRaster(covRaw, crs = crs(windens))
+  covClip <- raster::intersect(covProj, windens)
+  plot(covClip)
+  plot(windens, add = T)
+  writeRaster(covClip, filename = "treeCover.tif", format = "GTiff")
+  covExt <- extract(covClip, windens)
+
+  
+  covMean <- lapply(covExt, mean)
+  par(mfrow = c(2, 7))
+  lapply(covExt, hist)
+  par(mfrow = c(1,1))
+  plot(covClip); plot(windens, color = "id", add = T)
+
+  
+  covExtLog <- lapply(covExt, log)
+  lapply(covExtLog, hist)
+  
+  ## normal enough; now test for diffs between them ##
+  ## if diffs, determine for which heds
+  ## and see whether that would matter given density diffs you calcd earlier in xls
+  
+  
+  ## actually may need to make sure no >100 cov vals first, duh
+  lapply(covExt, max)
+  # oops, yep, how to handle...
+  # use arcmap to see which values
+  # mk they're all just water, force to 0
+  
+  waterFix <- function(vals) {
+  
+    vals <- ifelse(vals > 100, 0, vals)
+    
+  }
+  
+  test <- c(0, 5, 1000)
+  test <- waterFix(test)
+  # oh holy fuck, it actually worked
+  
+  covExtFixed <- lapply(covExt, waterFix)
+  covLog <- lapply(covExtFixed, log)
+  # oops need to add small value
+  covLog <- lapply(covExtFixed, function(x) x = log(x+0.01))
+  
+  # fwiw i finally figured out this isn't listed by the factor level
+  # it's just in order of unique herd id
+  names(covLog) <- unique(windens@data$id)
+  # booyah
+  
+  test <- unlist(covLog)
+
+  
+  
+  
+  
+  
+  
+  ## nixable, maybe ####
+  
+  par(mfrow = c(2, 7))
+  lapply(covLog, hist)
+  par(mfrow = c(1,1))
+  # noice.
+  
+  
+  # save win shp jic since you cleverly left your hd in the lab
+  writeOGR(windens, dsn = ".", layer = "windens", 
+           driver = "ESRI Shapefile", overwrite_layer = TRUE)
+  
+  # hm how do i know which element of the list maps to which polygon?
+  # ah it must be the factor levels in windens
+  
+  ext <- extract(covClip, windens, df = TRUE)
+
+  herdIDs <- data.frame(Herd = unique(windens@data$id), 
+                        ID = as.numeric(windens@data$id))
+  
+  dat <- ext %>%
+    mutate(cov = waterFix(perc_tree_2011),
+           covLog = log(cov)) %>%
+    left_join(herdIDs, by = "ID")
+  
+  datClean <- dat[!is.na(dat),]
+  hm <- dat[is.na(dat),]
+
+  # i think the herds are mapped incorrectly
+  # because clarks fork has lots of rows but their HR is super small
+  # so if you get significant results from the anova
+  # you need to fix that so you can determine where the diffs are
+  # but real quick in case they're not diff and it doesn't matter
+  
+  am <- aov(cov ~ Herd, data = datClean)
+  anova(am)
+  
+  
+  
+  #### starting over cleaner (post-explosion) ####
+  
+    library(raster) # ...rasters...
+    library(sp) # spatial
+    library(rgdal) # projections; working with shps
+    library(maptools) # writeSpatialShape
+    library(beepr) # exciting alarm when code finishes
+    library(dplyr) # joins, data work, general awesomeness
+    
+    setwd("C:\\Users\\Kristin\\Box Sync\\Documents\\PreUCB\\Migration")
+  
+  
+  ### Projections ###
+  
+    latlong <- CRS("+init=epsg:4326")
+    stateplane <- CRS("+init=epsg:2818")
+  
+  
+  ### Population year info ###
+  
+   popnyrs <- read.csv("popns-yrs.csv")
+  
+  
+  ### Winter HR polygons ###
+  
+    windens <- readOGR("E:\\UMT_2018\\Documents\\GIS\\Shapefiles\\Elk\\PopnHRs", layer ='WinHRcombosFeb')
+    windens <- spTransform(windens, stateplane)
+    
+  ### cover from my hero owen ###
+  
+    covRaw <- raster("E:\\Tree Cover\\perc_tree_2011.tif")
+    covProj <- projectRaster(covRaw, crs = crs(windens))
+    covClip <- raster::intersect(covProj, windens)
+    
+  ### extract cover per herd ###
+  
+   covExt <- extract(covClip, windens)
+  
+  ### make values >100 == 0 (these are water) ###
+  
+    waterFix <- function(vals) vals <- ifelse(vals > 100, 0, vals)
+    covExtFixed <- lapply(covExt, waterFix) # update values
+    names(covExtFixed) <- unique(windens@data$id) # map herds to values
+    covDat <- utils::stack(covExtFixed) # make it a dataframe
+    
+  
+  ### calculate summary stats ###
+    
+    cover <- covDat %>%
+      rename(Herd = ind) %>%
+      group_by(Herd) %>%
+      summarise(
+        meanCV = mean(values),
+        medCov = median(values),
+        iqrCov = IQR(values),
+        ppnCov50 = round(length(which(values > 50))/n(), 4)
+      )
+    length(which(cover$ppnCov50 > 0.01))
+    write.csv(cover, "sightability-cover.csv", row.names = F)
+  
+  ## CALCULATE: ##
+  
+  # 1. median and IQR of cover for each herd winter range
+  # 2. percent of each herd winter range with >50% cover
+  
+  # 
+  
+  ppn <- function(x) length(which(x>50))/length(x)
+  
+  
+
+
+  
+  covSmry <- data.frame(
+    
+  )
+
+      
+  
+  
+         
+  ## cut
+      
+      # add small value to 0s and take log to make data appx normal
+      
+      covLog <- lapply(covExtFixed, function(x) x = log(x+0.01))
+      
+      # fwiw i finally figured out this isn't listed by the factor level
+      # it's just in order of unique herd id
+      names(covLog) <- unique(windens@data$id)
+      
+      ## save point for when you explode it again ###
+      save.image("sightPrelim.RData")
+      
+      ### make covLog into a dataframe with names as row
+      
+      dat <- utils::stack(covLog) # YAY!!
+      colnames(dat) <- c("covLog", "Herd")
+      
+      
+      
+      ## let's not get carried away here. First just look at median cover per herd.
+  
+  
+      ### test for diffs between herds
+      anova(aov(covLog ~ Herd, data = dat)) # y
+      
+      
+      ### identify which herds are diff from the others
+      
+      herds <- unique(dat$Herd)
+      
+      # here's where you'd initialize a df to store results in, i'm sure they're all significant
+      
+      for(i in 1:length(unique(dat$Herd))-1) {
+        h1 <- as.character(herds[i])
+        h2 <- as.character(herds[i+1])
+        
+        tdat <- filter(dat, Herd == h1 | Herd == h2)
+        
+        t.test(covLog ~ Herd, dat = tdat)$p.value
+        
+      }
+      
+      ## uh
+      
+      
+      sumCov <- lapply(covExtFixed, median)
+      lapply(covExtFixed, mean)
+      lapply(covExtFixed, max)
+      
+      test <- c(0, 10, 57)
+      
+      
+      ppn50 <- data.frame(lapply(covExtFixed, ppn))
+      lapply(ppn50, max)
+      
+      

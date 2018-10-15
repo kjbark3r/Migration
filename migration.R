@@ -372,7 +372,54 @@
       hist(herdsums$ppnIrrig)
       summary(herdsums$ppnIrrig)
       #IQR: > 0.8361-0.3956 = 0.4405
-  
+ 
+      
+  #### Canopy cover on winter ranges (per reviewer feedback RE sightability) ####
+      
+      
+      ### Population year info ###
+      
+      popnyrs <- read.csv("popns-yrs.csv")
+      
+      
+      ### Winter HR polygons ###
+      
+      windens <- readOGR("E:\\UMT_2018\\Documents\\GIS\\Shapefiles\\Elk\\PopnHRs", layer ='WinHRcombosFeb')
+      windens <- spTransform(windens, stateplane)
+      
+      ### cover from my hero owen ###
+      
+      covRaw <- raster("E:\\Tree Cover\\perc_tree_2011.tif")
+      covProj <- projectRaster(covRaw, crs = crs(windens))
+      covClip <- raster::intersect(covProj, windens)
+      
+      ### extract cover per herd ###
+      
+      covExt <- extract(covClip, windens)
+      
+      ### make values >100 == 0 (these are water) ###
+      
+      waterFix <- function(vals) vals <- ifelse(vals > 100, 0, vals)
+      covExtFixed <- lapply(covExt, waterFix) # update values
+      names(covExtFixed) <- unique(windens@data$id) # map herds to values
+      covDat <- utils::stack(covExtFixed) # make it a dataframe
+      
+      
+      ### calculate summary stats ###
+      
+      cover <- covDat %>%
+        rename(Herd = ind) %>%
+        group_by(Herd) %>%
+        summarise(
+          meanCV = mean(values),
+          medCov = median(values),
+          iqrCov = IQR(values),
+          ppnCov50 = round(length(which(values > 50))/n(), 4)
+        )
+      length(which(cover$ppnCov50 > 0.01))
+      write.csv(cover, "sightability-cover.csv", row.names = F)
+      
+      
 
     
   #### Check covariates for collinearity & assess univariate relationships ####
@@ -394,56 +441,44 @@
 
     #### a priori models ####
       
-      m1 <- clmm(behavO ~ deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m2 <- clmm(behavO ~ predFor + deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m3 <- clmm(behavO ~ predFor + deltaFor + deltaFor:predFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m4 <- clmm(behavO ~ predFor + deltaFor + Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m5 <- clmm(behavO ~ predFor + deltaFor + Dens + deltaFor:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m6 <- clmm(behavO ~ predFor + deltaFor + Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m7 <- clmm(behavO ~ predFor + deltaFor + Old + deltaFor:Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m8 <- clmm(behavO ~ predFor + deltaFor + Old + Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m9 <- clmm(behavO ~ predFor + deltaFor + Old + Dens + Old:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m10 <- clmm(behavO ~ densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m11 <- clmm(behavO ~ predFor + deltaFor + densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m12 <- clmm(behavO ~ predFor + deltaFor + densOwn + deltaFor:predFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m13 <- clmm(behavO ~ predFor + deltaFor + densOwn + deltaFor:densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m14 <- clmm(behavO ~ densOwn + Old + densOwn:Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m15 <- clmm(behavO ~ predFor + deltaFor + densOwn + Old + densOwn:Old + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m16 <- clmm(behavO ~ irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m17 <- clmm(behavO ~ densOwn + irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m18 <- clmm(behavO ~ predFor + deltaFor + irrig   + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m19 <- clmm(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)  
-      m20 <- clmm(behavO ~ predFor + deltaFor + irrig + predFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m21 <- clmm(behavO ~ irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m22 <- clmm(behavO ~ predFor + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)  
-      m23 <- clmm(behavO ~ predFor + irrig + Old + Dens + Old:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)  
-      m24 <- clmm(behavO ~ densOwn + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat)
-      m25 <- clmm(behavO ~ densOwn + irrig + Dens + densOwn:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat) 
-      m26 <- clmm(behavO ~ predFor + irrig + densOwn + irrig:densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = olddat) 
+      m1 <- clmm(behavO ~ deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m2 <- clmm(behavO ~ predFor + deltaFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m3 <- clmm(behavO ~ predFor + deltaFor + deltaFor:predFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m4 <- clmm(behavO ~ predFor + deltaFor + Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m5 <- clmm(behavO ~ predFor + deltaFor + Dens + deltaFor:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m6 <- clmm(behavO ~ densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m7 <- clmm(behavO ~ predFor + deltaFor + densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m8 <- clmm(behavO ~ predFor + deltaFor + densOwn + deltaFor:predFor + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m9 <- clmm(behavO ~ predFor + deltaFor + densOwn + deltaFor:densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m10 <- clmm(behavO ~ irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m11 <- clmm(behavO ~ densOwn + irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m12 <- clmm(behavO ~ predFor + deltaFor + irrig   + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m13 <- clmm(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)  
+      m14 <- clmm(behavO ~ predFor + deltaFor + irrig + predFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m15 <- clmm(behavO ~ irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m16 <- clmm(behavO ~ predFor + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)  
+      m17 <- clmm(behavO ~ densOwn + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)
+      m18 <- clmm(behavO ~ densOwn + irrig + Dens + densOwn:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat) 
+      m19 <- clmm(behavO ~ predFor + irrig + densOwn + irrig:densOwn + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat) 
       
       
       # compete with AICc 
       mods <- list()
-      modnms <- paste0("m", rep(1:26))
+      modnms <- paste0("m", rep(1:19))
       for (i in 1:length(modnms)) { mods[[i]] <- get(modnms[[i]]) }
       aictab(cand.set = mods, modnames = modnms)
       aictab <- data.frame(aictab(cand.set = mods, modnames = modnms))
-      write.csv(aictab, "aic-allbehavmods-feb.csv", row.names=F)
+      write.csv(aictab, "aic-allbehavmods-feb-noage.csv", row.names=F)
+
       
       # identify prelim top-supported models (still need to look at LL, K, etc) 
       ftw <- subset(aictab, Delta_AICc < 4.0); ftw <- droplevels(ftw)
-      
 
-      # and split out moderately-supported models from top model
-      topmod <- m19
-      okmods <- ftw[ftw$Modnames != "m19",]
-      
-      
       
 
   #### AMERICA'S NEXT TOP MODELS! #### 
       
-    # add back in the indivs for whom we don't have age estimations (age isn't a covariate; might as well use everybody)
+    # name top models more intuitively
     modDelta <- clmm(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)  
     modDens <- clmm(behavO ~ predFor + irrig + Dens + irrig:Dens + (1|Herd), Hess = TRUE, nAGQ = 10, dat = dat)  
 
@@ -456,23 +491,10 @@
     #### test proportional odds assumptions ####
       
       
-      ## [not reported] nominal & scale effects (does predFor have same effect on ea response category?) ##
-          
-          ## predFor  - nominal effect
-          mod2nompred <- clmm2(behavO ~ deltaFor + irrig + deltaFor:irrig, nominal = ~predFor, 
-            random = Herd, Hess = TRUE, nAGQ = 10, dat = dat)
-          anova(mod2, mod2nompred)
-          # no evidence of difference in how behavs respond to predfor (p = 0.449)
-          
-          ## predFor - scale effect
-          mod2scalepred <- clmm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, scale = ~predFor, 
-            random = Herd, Hess = TRUE, nAGQ = 10, dat = dat) 
-          anova(mod2, mod2scalepred) 
-          # samesies p = 0.9698
-
       
       ## thresholds (does whole model describe diff effects for ea response category?) ##
 
+      
           ## define topmodel using clmm2 so anova will work (using default flexible thresholds)
           mod2 <- clmm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, 
             random = Herd, Hess = TRUE, nAGQ = 10, dat = dat, threshold = "flexible")  
@@ -483,7 +505,24 @@
           
           ## test for diffs
           anova(mod2, mod2equ)
-          # no diff in likelihood between the models (p = 1)      
+          # no diff in likelihood between the models (p = 1)     
+          
+          
+          
+       ## [not reported] nominal & scale effects (does predFor have same effect on ea response category?) ##
+          
+          ## predFor  - nominal effect
+          mod2nompred <- clmm2(behavO ~ deltaFor + irrig + deltaFor:irrig, nominal = ~predFor, 
+                               random = Herd, Hess = TRUE, nAGQ = 10, dat = dat)
+          anova(mod2, mod2nompred)
+          # no evidence of difference in how behavs respond to predfor (p = 0.456)
+          
+          ## predFor - scale effect
+          mod2scalepred <- clmm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, scale = ~predFor, 
+                                 random = Herd, Hess = TRUE, nAGQ = 10, dat = dat) 
+          anova(mod2, mod2scalepred) 
+          # samesies p = 0.8208
+          
       
         
     
@@ -494,7 +533,7 @@
         nore <- clm2(behavO ~ predFor + deltaFor + irrig + deltaFor:irrig, dat = dat) 
 
         ## compete top model with the one without random effect
-        anova(mod2, nore)   # p = 9.63e-11, strong support for including random effect      
+        anova(mod2, nore)   # p = 2.11e-10, strong support for including random effect      
         summary(nore); summary(mod2)
         
         
@@ -502,7 +541,7 @@
     #### compare top model to one of just herd (for funzies) ####
         
         modHerd <- clm2(behavO ~ Herd, dat = dat)
-        anova(mod2, modHerd) # p = 9.78e-05, herd alone explains behavior better :(
+        anova(mod2, modHerd) # p = 0.0001, herd alone explains behavior better :(
         summary(mod2); summary(modHerd) # oh but Hessian is freakin' huge for herd model
                                         # and so are z values for 3 herds
         mod2$ranef
@@ -599,7 +638,7 @@
         
           (nag.c <- r.squaredLR(modDelta, null = nullmod.nore)) # 0.31 explained by delta model
           (nag.c2 <- r.squaredLR(modDens, null = nullmod.nore)) # 0.30 explailed by dens model
-          (nag.m <- r.squaredLR(modDelta, null = nullmod.re)) # 0.12 explained by fixed effects alone    
+          (nag.m <- r.squaredLR(modDelta, null = nullmod.re)) # 0.07 explained by fixed effects alone    
         
 
         
