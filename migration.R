@@ -48,7 +48,7 @@
       }
     }
 
-    rm(wd_workcomp, wd_laptop, wd_worklaptop)
+    rm(wd_workcomp, wd_laptop, wd_worklaptop, wd_UCB)
     
 
     
@@ -934,7 +934,7 @@
           ## predFor - b&w 
           pp.pf.bw <- ggplot(preddatDelta, aes(x = predFor, y = predprobDelta, 
                                                linetype = behavO, color = behavO)) +
-            geom_smooth(se = FALSE, color = "black", size = 1) +
+            geom_smooth(se = TRUE, color = "black", size = 1) +
             scale_linetype_manual(
               values=c("dotted", "dotdash", "solid"), 
               name = "", labels = c("Resident", "Intermediate", "Migrant")) +
@@ -952,6 +952,7 @@
             guides(color = guide_legend(override.aes = list(linetype = 0)),
                    shape = guide_legend(override.aes = list(linetype = 0,
                                                             size = 5))) 
+          pp.pf.bw
         
         
         
