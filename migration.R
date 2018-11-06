@@ -747,10 +747,9 @@
 ### ### ### ### ###
  
         
-        # oikos width options (PS - panel letters (lowercase) eg (a)) (pps - <50MB) (ppps = col = :))
-        wcol1.0 = 8 # units = cm
-        wcol1.5 = 12.5 # 1.5 column
-        wcol2 = 16.6
+        # wiley width options
+        wcol = 7 # units = cm
+        wpg = 18 # this wasn't actually explicit but we're rolling with it for now
     
         
     #### Proportion behavior by herd ####  
@@ -867,31 +866,70 @@
          
          
          # number of samples to draw per covariate #
-         nobs <- 1000
+         nobs <- 100000
+         
+            # visualize data distributions to match
+            par(mfrow = c(3,1))
+            hist(dat$predFor); hist(dat$deltaFor); hist(dat$Dens)
          
              # irrig: bernoulli distn with prob = mean of irrig data
-             irrig <- rbinom(nobs, 1, mean(as.numeric(as.character(dat$irrig))))
+             irrigPrelim <- rbinom(nobs, 1, mean(as.numeric(as.character(dat$irrig))))
              
-             # predFor: normal dist with mean from data, 1/3 sd to keep within data range
-             predFor <- rnorm(nobs, mean(dat$predFor), sd(dat$predFor)/3)
+             # predFor: normal dist with mean from data
+             predForPrelim <- rnorm(nobs, mean(dat$predFor))
              
-             # deltaFor: exponential distn with shape param = 0.4 
-             deltaFor <- rexp(nobs, 0.4) # 0.4 trial & error, closest to range of data 
+             # deltaFor: exponential distn
+             deltaForPrelim <- rexp(nobs, 0.2) # trial & error, closest to data range
      
-             # Dens: exponential distn with shape param = 0.3
-             Dens <- rexp(nobs, 0.3) # trial & error again 
-         
+             # Dens: exponential distn with shape param = 0.2
+             DensPrelim <- rexp(nobs, 0.2) # trial & error again 
              
+             
+             # check against raw data distributions
+             par(mfrow = c(2,3))
+             hist(dat$predFor); hist(dat$deltaFor); hist(dat$Dens)
+             hist(predForPrelim); hist(deltaForPrelim); hist(DensPrelim)               
+             
+
+             # truncate range simulated data to match raw data
+             datIrrig <- filter(dat, irrig == 1)
+             predForPre2 <- subset(predForPrelim, 
+                               predForPrelim > min(datIrrig$predFor) & 
+                               predForPrelim < max(datIrrig$predFor))
+             deltaForPre2 <- subset(deltaForPrelim, 
+                                deltaForPrelim > min(dat$deltaFor) & 
+                                deltaForPrelim < max(dat$deltaFor))
+             DensPre2 <- subset(DensPrelim, 
+                            DensPrelim > min(dat$Dens) & 
+                            DensPrelim < max(dat$Dens))  
+             
+             
+             # check final simulated data against raw data distributions
+             par(mfrow = c(2,3))
+             hist(dat$predFor); hist(dat$deltaFor); hist(dat$Dens)
+             hist(predForPre2); hist(deltaForPre2); hist(DensPre2)                 
+             par(mfrow = c(1,1))
+             
+             # randomly select same number of simulated data (b/c truncation)
+             nsamp <- min(length(deltaForPre2), length(predForPre2), length(DensPre2))
+             irrig <- sample(irrigPrelim, size = nsamp, replace = FALSE)
+             predFor <- sample(predForPre2, size = nsamp, replace = FALSE)
+             deltaFor <- sample(deltaForPre2, size = nsamp, replace = FALSE)
+             Dens <- sample(DensPre2, size = nsamp, replace = FALSE)
              
          # combine all samples, then duplicate x3 (once for each behav type) #
          preds <- cbind(irrig, predFor, deltaFor, Dens)
          predDat <- data.frame(rbind(preds, preds, preds))
-         predDat$behavO <- c(rep("resident", nobs), rep("other", nobs), rep("migrant", nobs))
+         predDat$behavO <- c(rep("resident", nsamp), 
+                             rep("other", nsamp), 
+                             rep("migrant", nsamp))
 
          
          # format columns same as in dat #
          predDat <- predDat %>%
-           mutate(behavO = factor(behavO, levels = c("resident", "other", "migrant"), ordered = TRUE),
+           mutate(behavO = factor(behavO, 
+                                  levels = c("resident", "other", "migrant"), 
+                                  ordered = TRUE),
                   irrig = factor(irrig))
          
      
@@ -917,6 +955,135 @@
         
         #### c) plot predictions ####  
         
+          ## predFor - prediction plot - with legend & no line break in x-label
+          pp.pf.bw.l <- ggplot(preddatDelta, aes(x = predFor, y = predprobDelta, 
+                                               linetype = behavO, color = behavO)) +
+            geom_smooth(se = FALSE, color = "black", size = 1) +
+            scale_linetype_manual(
+              values=c("dotted", "dotdash", "solid"), 
+              name = "", labels = c("Resident", "Intermediate", "Migrant")) +
+            scale_color_grey() +
+            labs(
+              x = "Forage predictabilty (- 6-yr stdev of NDVI amplitude)", 
+              y = "Predicted probability") +
+            theme_minimal() +
+            theme(text = element_text(size=18), 
+                  plot.title = element_text(hjust = 0.5),
+                  legend.key.width = unit(1, 'cm')) +
+            theme(legend.title=element_blank(),
+                  text = element_text(size=30)) +
+            guides(color = guide_legend(override.aes = list(linetype = 0)),
+                   shape = guide_legend(override.aes = list(linetype = 0,
+                                                            size = 5))) 
+          ggsave("./Plots/predFor-pred-legend.jpg",
+                 plot = pp.pf.bw.l,
+                 device = "jpeg",
+                 dpi = 600)        
+          
+          
+          ## predFor - prediction plot - without legend 
+          pp.pf.bw <- ggplot(preddatDelta, aes(x = predFor, y = predprobDelta, 
+                                                 linetype = behavO, color = behavO)) +
+            geom_smooth(se = FALSE, color = "black", size = 1) +
+            scale_linetype_manual(
+              values=c("dotted", "dotdash", "solid"), 
+              name = "", labels = c("Resident", "Intermediate", "Migrant")) +
+            scale_color_grey() +
+            labs(
+              x = "Forage predictabilty \n (- 6-yr stdev of NDVI amplitude)", 
+              y = "Predicted probability") +
+            theme_minimal() +
+            theme(text = element_text(size=18), 
+                  plot.title = element_text(hjust = 0.5),
+                  legend.position = "none")      
+          ggsave("./Plots/predFor-pred.jpg",
+                 plot = pp.pf.bw,
+                 device = "jpeg",
+                 dpi = 600,
+                 units = "cm",
+                 width = wpg,
+                 height = wpg/2) 
+          
+          
+          ## deltaFor - prediction plot - without legend 
+          pp.df.bw <- ggplot(
+            filter(preddatDelta, irrig == 1),
+            aes(x = deltaFor, y = predprobDelta,
+                linetype = behavO, color = behavO)) +
+            geom_smooth(se = FALSE, color = "black", size = 1) +
+            scale_linetype_manual(
+              values=c("dotted", "dotdash", "solid"), 
+              name = "", labels = c("Resident", "Intermediate", "Migrant")) +
+            scale_color_grey() +
+            labs(
+              x = "Summer forage difference \n (maxNDVI outside - \n inside winter range)", 
+              y = "Predicted probability") +
+            theme_minimal() +
+            theme(text = element_text(size=18), 
+                  plot.title = element_text(hjust = 0.5),
+                  legend.position = "none")      
+          ggsave("./Plots/deltaFor-pred.jpg",
+                 plot = pp.df.bw,
+                 device = "jpeg",
+                 dpi = 600,
+                 units = "cm",
+                 width = wpg,
+                 height = wpg/2)
+          
+          
+          # predFor - raw data plot
+          rd.pf.bw <- ggplot() + 
+            stat_density(data = dat, size = 1,  
+                         geom = "line", position = "identity",
+                         aes(x = predFor, group = behavO, linetype = behavO)) +
+            labs(
+              x = "Forage predictabilty \n (- 6-yr stdev..)", 
+              y = "Density") +
+            theme_minimal() +
+            scale_linetype_manual(
+              values=c("dotted", "dotdash", "solid"), 
+              name = "", labels = c("Resident", "Intermediate", "Migrant")) +
+            theme(text = element_text(size=18), 
+                  plot.title = element_text(hjust = 0.5),
+                  legend.position = "none")
+          ggsave("./Plots/predFor-freq.jpg",
+                 plot = rd.pf.bw,
+                 device = "jpeg",
+                 dpi = 600,
+                 units = "cm",
+                 width = wcol,
+                 height = wpg/2)
+          
+          
+          # deltaFor - raw data plot
+          rd.df.bw <- ggplot() + 
+            stat_density(data = filter(dat, irrig == 1), size = 1,  
+                         geom = "line", position = "identity",
+                         aes(x = deltaFor, group = behavO, linetype = behavO)) +
+            labs(
+              x = "Summer forage difference \n (maxNDVI outside - \n inside winter range)", 
+              y = "Density") +
+            theme_minimal() +
+            scale_linetype_manual(
+              values=c("dotted", "dotdash", "solid"), 
+              name = "", labels = c("Resident", "Intermediate", "Migrant")) +
+            theme(text = element_text(size=18), 
+                  plot.title = element_text(hjust = 0.5),
+                  legend.position = "none")
+          ggsave("./Plots/deltaFor-freq.jpg",
+                 plot = rd.df.bw,
+                 device = "jpeg",
+                 dpi = 600,
+                 units = "cm",
+                 width = wcol,
+                 height = wpg/2)          
+          
+        
+        
+        
+        
+        #### [c.a) color plots for presentations] ####
+        
           
           ## predFor - color
           pp.pf <- ggplot(preddatDelta, aes(x = predFor, y = predprobDelta, colour = behavO)) +
@@ -931,29 +1098,8 @@
           pp.pf
         
           
-          ## predFor - b&w 
-          pp.pf.bw <- ggplot(preddatDelta, aes(x = predFor, y = predprobDelta, 
-                                               linetype = behavO, color = behavO)) +
-            geom_smooth(se = TRUE, color = "black", size = 1) +
-            scale_linetype_manual(
-              values=c("dotted", "dotdash", "solid"), 
-              name = "", labels = c("Resident", "Intermediate", "Migrant")) +
-            scale_color_grey() +
-            geom_point(size = 0.5) +
-            labs(
-              x = "Forage predictabilty \n (- 6-yr stdev of NDVI amplitude)", 
-              y = "Predicted probability") +
-            theme_minimal() +
-            theme(text = element_text(size=18), 
-                  plot.title = element_text(hjust = 0.5),
-                  legend.key.width = unit(1, 'cm')) +
-            theme(legend.title=element_blank(),
-                  text = element_text(size=20)) +
-            guides(color = guide_legend(override.aes = list(linetype = 0)),
-                   shape = guide_legend(override.aes = list(linetype = 0,
-                                                            size = 5))) 
-          pp.pf.bw
-        
+
+          
         
         
         
